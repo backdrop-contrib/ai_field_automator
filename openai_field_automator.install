@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * @file
+ * Install / uninstall hooks for openai_field_automator.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function openai_field_automator_install() {
+  backdrop_set_message(t('OpenAI Field Automator installed. Configure it by editing a field on a content type, or view the <a href="!url">automator overview</a>.', [
+    '!url' => url('admin/config/openai/field-automator'),
+  ]));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function openai_field_automator_uninstall() {
+  // Delete all per-field automator config objects created by this module.
+  foreach (config_get_names_with_prefix('openai_field_automator.') as $config_name) {
+    config($config_name)->delete();
+  }
+
+  // Remove all ai_automator_status field instances and the base field.
+  $field = field_read_field('ai_automator_status');
+  if ($field) {
+    field_delete_field('ai_automator_status');
+  }
+}
+
+/**
+ * Create AI Automator Status field on bundles with existing automator configs.
+ */
+function openai_field_automator_update_1001() {
+  // Load the StatusField class.
+  backdrop_load('module', 'openai_field_automator');
+
+  $configs = config_get_names_with_prefix('openai_field_automator.');
+  $bundles_processed = array();
+
+  foreach ($configs as $config_name) {
+    $c = config_get($config_name);
+    if (empty($c) || empty($c['enabled'])) {
+      continue;
+    }
+    $key = $c['entity_type'] . '/' . $c['bundle'];
+    if (isset($bundles_processed[$key])) {
+      continue;
+    }
+    $bundles_processed[$key] = TRUE;
+    OpenAIFieldAutomatorStatusField::modifyStatusField($c['entity_type'], $c['bundle']);
+  }
+
+  if (!empty($bundles_processed)) {
+    return t('Created AI Automator Status field on @count bundle(s).', array(
+      '@count' => count($bundles_processed),
+    ));
+  }
+  return t('No bundles with automator configs found.');
+}

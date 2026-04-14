@@ -1,0 +1,12 @@
+/**
+ * Admin styles for OpenAI Field Automator.
+ */
+
+#field-automator-field-wrapper {
+  transition: opacity 0.15s ease;
+}
+
+.field-automator-rule-list td,
+.field-automator-rule-list th {
+  vertical-align: middle;
+}

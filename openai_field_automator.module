@@ -1,0 +1,1262 @@
+<?php
+
+/**
+ * @file
+ * OpenAI Field Automator — auto-populates entity fields with AI-generated
+ * content when content is saved.
+ *
+ * Configuration lives directly on each field's settings form
+ * (Structure > Content types > [type] > Manage fields > [field] > Edit).
+ * The automator settings are saved as a per-field Backdrop config object:
+ *   openai_field_automator.{entity_type}.{bundle}.{field_name}
+ */
+
+// ---------------------------------------------------------------------------
+// Autoload
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_autoload_info().
+ */
+function openai_field_automator_autoload_info() {
+  return [
+    'OpenAIFieldAutomatorInterface'  => 'includes/OpenAIFieldAutomatorInterface.inc',
+    'OpenAIFieldAutomatorBase'       => 'includes/OpenAIFieldAutomatorBase.inc',
+    'OpenAIFieldAutomatorRunner'     => 'includes/OpenAIFieldAutomatorRunner.inc',
+    'OpenAIFieldAutomatorSimpleText' => 'includes/plugins/text/SimpleText.inc',
+    'OpenAIFieldAutomatorLongText'   => 'includes/plugins/text/LongText.inc',
+    'OpenAIFieldAutomatorTextCreateSummary' => 'includes/plugins/text/TextCreateSummary.inc',
+    'OpenAIFieldAutomatorBoolean'    => 'includes/plugins/scalar/Boolean.inc',
+    'OpenAIFieldAutomatorNumeric'    => 'includes/plugins/scalar/Numeric.inc',
+    'OpenAIFieldAutomatorDateExtract' => 'includes/plugins/scalar/DateExtract.inc',
+    'OpenAIFieldAutomatorEmail'      => 'includes/plugins/scalar/Email.inc',
+    'OpenAIFieldAutomatorTelephone'  => 'includes/plugins/scalar/Telephone.inc',
+    'OpenAIFieldAutomatorOptions'    => 'includes/plugins/scalar/Options.inc',
+    'OpenAIFieldAutomatorTaxonomyTerms' => 'includes/plugins/reference/TaxonomyTerms.inc',
+    'OpenAIFieldAutomatorEntityReference' => 'includes/plugins/reference/EntityReference.inc',
+    'OpenAIFieldAutomatorLink'       => 'includes/plugins/scalar/Link.inc',
+    'OpenAIFieldAutomatorTextToImage' => 'includes/plugins/media/TextToImage.inc',
+    'OpenAIFieldAutomatorImageAltText' => 'includes/plugins/media/ImageAltText.inc',
+    'OpenAIFieldAutomatorAudioToText' => 'includes/plugins/media/AudioToText.inc',
+    'OpenAIFieldAutomatorTextToSpeech' => 'includes/plugins/media/TextToSpeech.inc',
+    'OpenAIFieldAutomatorVideoToText' => 'includes/plugins/media/VideoToText.inc',
+    'OpenAIFieldAutomatorJsonStructured' => 'includes/plugins/structured/JsonStructured.inc',
+    'OpenAIFieldAutomatorMetatag' => 'includes/plugins/structured/Metatag.inc',
+    'OpenAIFieldAutomatorModerationState' => 'includes/plugins/structured/ModerationState.inc',
+    'OpenAIFieldAutomatorAddress' => 'includes/plugins/domain/Address.inc',
+    'OpenAIFieldAutomatorOfficeHours' => 'includes/plugins/domain/OfficeHours.inc',
+    'OpenAIFieldAutomatorFaqField' => 'includes/plugins/domain/FaqField.inc',
+    'OpenAIFieldAutomatorChartFromText' => 'includes/plugins/domain/ChartFromText.inc',
+    'OpenAIFieldAutomatorMediaImageGeneration' => 'includes/plugins/media/MediaImageGeneration.inc',
+    'OpenAIFieldAutomatorMediaAudioGeneration' => 'includes/plugins/media/MediaAudioGeneration.inc',
+    'OpenAIFieldAutomatorRewriteImageFilename' => 'includes/plugins/media/RewriteImageFilename.inc',
+    'OpenAIFieldAutomatorVideoToHtml' => 'includes/plugins/media/VideoToHtml.inc',
+    'OpenAIFieldAutomatorVideoToImage' => 'includes/plugins/media/VideoToImage.inc',
+    'OpenAIFieldAutomatorVideoToVideo' => 'includes/plugins/media/VideoToVideo.inc',
+    'OpenAIFieldAutomatorSearchBase' => 'includes/plugins/search/SearchBase.inc',
+    'OpenAIFieldAutomatorVectorSearchText' => 'includes/plugins/search/VectorSearchText.inc',
+    'OpenAIFieldAutomatorVectorSearchEntityReference' => 'includes/plugins/search/VectorSearchEntityReference.inc',
+    'OpenAIFieldAutomatorViewsExtractor' => 'includes/plugins/search/ViewsExtractor.inc',
+    'OpenAIFieldAutomatorStatusField' => 'includes/OpenAIFieldAutomatorStatusField.inc',
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Async background job support (openai_async integration)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_openai_async_callbacks().
+ *
+ * Registers the field generation callback with openai_async so it can be
+ * invoked safely from the background process endpoint.
+ */
+function openai_field_automator_openai_async_callbacks() {
+  return array(
+    'openai_field_automator_async_generate' => t('Generate an AI field value in the background.'),
+  );
+}
+
+/**
+ * Async callback: loads a saved entity and runs the field automator.
+ *
+ * Called by openai_async in a background PHP process. Only runs for saved
+ * entities (entity_id is always set in $data).
+ *
+ * @param array $data
+ *   Keys: entity_type, entity_id, bundle, field_name, config, wrapper_id, delta.
+ *
+ * @return array
+ *   Result shape consumed by openai_field_automator_async.js:
+ *   - field_name, field_type, wrapper_id, delta, values[].
+ *
+ * @throws Exception on any failure so openai_async can record the error.
+ */
+function openai_field_automator_async_generate(array $data) {
+  $entity_type = $data['entity_type'];
+  $entity_id   = $data['entity_id'];
+  $field_name  = $data['field_name'];
+  $config      = $data['config'];
+  $wrapper_id  = $data['wrapper_id'];
+  $delta       = isset($data['delta']) ? (int) $data['delta'] : 0;
+  $account_uid = isset($data['account_uid']) ? (int) $data['account_uid'] : 0;
+
+  $entities = entity_load($entity_type, array($entity_id));
+  $entity   = reset($entities);
+  if (!$entity) {
+    throw new Exception(t('Entity not found: @type/@id.', array('@type' => $entity_type, '@id' => $entity_id)));
+  }
+
+  // Respect openai_privacy opt-out settings.
+  $bundle = isset($data['bundle']) ? $data['bundle'] : '';
+  $account = NULL;
+  if ($account_uid > 0) {
+    $account = user_load($account_uid);
+  }
+  if (module_exists('openai_privacy') && !openai_privacy_entity_allowed($entity_type, $bundle, $account)) {
+    throw new Exception(t('AI processing is not permitted for @type/@bundle.', array('@type' => $entity_type, '@bundle' => $bundle)));
+  }
+
+  $types   = openai_field_automator_get_types();
+  $type_id = $config['automator_type'];
+  if (empty($types[$type_id])) {
+    throw new Exception(t('Unknown automator type: @type.', array('@type' => $type_id)));
+  }
+
+  $plugin = openai_field_automator_load_plugin($type_id, $types[$type_id]);
+  if (!$plugin) {
+    throw new Exception(t('Could not load plugin: @type.', array('@type' => $type_id)));
+  }
+
+  $values = $plugin->generate($entity, $field_name, $config);
+  $values = openai_field_automator_filter_generated_values($plugin, $entity, $field_name, $config, $values);
+  if (empty($values)) {
+    throw new Exception(t('No values generated for @field.', array('@field' => $field_name)));
+  }
+
+  // Apply joiner if configured.
+  $joiner = isset($config['joiner']) ? $config['joiner'] : '';
+  if ($joiner !== '' && count($values) > 1) {
+    if ($joiner === 'other') {
+      $joiner = isset($config['joiner_other']) ? $config['joiner_other'] : '';
+    }
+    $joiner = str_replace(array('\n', '\t'), array("\n", "\t"), $joiner);
+    $values = array(implode($joiner, $values));
+  }
+
+  $plugin->storeValues($entity, $values, $field_name, $config);
+  $items = isset($entity->{$field_name}[LANGUAGE_NONE]) ? $entity->{$field_name}[LANGUAGE_NONE] : array();
+
+  $field_info = field_info_field($field_name);
+  $field_type = isset($field_info['type']) ? $field_info['type'] : '';
+
+  return array(
+    'field_name' => $field_name,
+    'field_type' => $field_type,
+    'wrapper_id' => $wrapper_id,
+    'delta'      => $delta,
+    'values'     => $items,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Config info
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_config_info().
+ */
+function openai_field_automator_config_info() {
+  return [
+    'openai_field_automator.' => [
+      'name_key'  => 'field_name',
+      'label_key' => 'field_name',
+      'group'     => t('OpenAI Field Automator'),
+    ],
+  ];
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ *
+ * Ensure this module's field-ui form alter runs before list.module so we can
+ * normalize status-field metadata before list alters the same form.
+ */
+function openai_field_automator_module_implements_alter(&$implementations, $hook) {
+  if ($hook !== 'form_field_ui_field_edit_form_alter') {
+    return;
+  }
+  if (!isset($implementations['openai_field_automator'])) {
+    return;
+  }
+  $group = $implementations['openai_field_automator'];
+  unset($implementations['openai_field_automator']);
+  $implementations = ['openai_field_automator' => $group] + $implementations;
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_permission().
+ */
+function openai_field_automator_permission() {
+  return [
+    'administer openai field automator' => [
+      'title'       => t('Administer OpenAI Field Automator'),
+      'description' => t('Manage per-field AI automator settings.'),
+    ],
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Menu (overview only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_menu().
+ */
+function openai_field_automator_menu() {
+  $items = [];
+
+  $items['admin/config/openai/field-automator'] = [
+    'title'            => 'Field Automator',
+    'description'      => 'Overview of all fields with AI Automator enabled.',
+    'page callback'    => 'openai_field_automator_overview_page',
+    'access arguments' => ['administer openai field automator'],
+  ];
+
+  $items['admin/config/openai/field-automator/overview'] = [
+    'title'  => 'Overview',
+    'type'   => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  ];
+
+  // Standalone chain route (for direct links from the overview page).
+  $items['admin/config/openai/field-automator/chain/%/%'] = [
+    'title'            => 'Automator Chain',
+    'description'      => 'Reorder automators for a content type.',
+    'page callback'    => 'backdrop_get_form',
+    'page arguments'   => ['openai_field_automator_chain_form', 5, 6],
+    'access arguments' => ['administer openai field automator'],
+    'file'             => 'includes/OpenAIFieldAutomatorChainForm.inc',
+  ];
+
+  // Add "AI Automator Run Order" local task tab on each entity bundle's
+  // admin page (alongside "Manage fields" and "Manage display").
+  foreach (entity_get_info() as $entity_type => $entity_info) {
+    if (empty($entity_info['fieldable'])) {
+      continue;
+    }
+    foreach ($entity_info['bundles'] as $bundle_name => $bundle_info) {
+      if (!isset($bundle_info['admin']['path'])) {
+        continue;
+      }
+      $path = $bundle_info['admin']['path'];
+
+      // Determine the bundle argument position (same logic as field_ui).
+      if (isset($bundle_info['admin']['bundle argument'])) {
+        $bundle_arg = $bundle_info['admin']['bundle argument'];
+      }
+      else {
+        $bundle_arg = $bundle_name;
+      }
+
+      $items["$path/automator-chain"] = [
+        'title'            => 'AI Automator Run Order',
+        'page callback'    => 'backdrop_get_form',
+        'page arguments'   => ['openai_field_automator_chain_form', $entity_type, $bundle_arg],
+        'access arguments' => ['administer openai field automator'],
+        'type'             => MENU_LOCAL_TASK,
+        'weight'           => 100,
+        'file'             => 'includes/OpenAIFieldAutomatorChainForm.inc',
+      ];
+    }
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function openai_field_automator_theme() {
+  return [
+    'openai_field_automator_chain_table' => [
+      'render element' => 'element',
+      'file' => 'includes/OpenAIFieldAutomatorChainForm.inc',
+    ],
+  ];
+}
+
+/**
+ * Preprocesses the chain form to use the custom table theme for the items.
+ */
+function openai_field_automator_form_openai_field_automator_chain_form_alter(&$form, &$form_state) {
+  if (isset($form['items'])) {
+    $form['items']['#theme'] = 'openai_field_automator_chain_table';
+  }
+}
+
+/**
+ * Page callback: overview of all active automator configs.
+ */
+function openai_field_automator_overview_page() {
+  $configs = config_get_names_with_prefix('openai_field_automator.');
+  $rows = [];
+  $bundles_seen = [];
+
+  foreach ($configs as $config_name) {
+    $c = config_get($config_name);
+    if (empty($c) || empty($c['enabled'])) {
+      continue;
+    }
+    $entity_type = $c['entity_type'];
+    $bundle      = $c['bundle'];
+    $field_name  = $c['field_name'];
+
+    $bundles_seen["{$entity_type}/{$bundle}"] = [
+      'entity_type' => $entity_type,
+      'bundle' => $bundle,
+    ];
+
+    // Link directly to field edit for node bundles.
+    $field_cell = check_plain($field_name);
+    if ($entity_type === 'node') {
+      $edit_path = "admin/structure/types/manage/{$bundle}/fields/{$field_name}";
+      $field_cell = l($field_name, $edit_path);
+    }
+
+    // Chain link for the bundle.
+    $chain_link = '';
+    if ($entity_type === 'node') {
+      $chain_link = l(t('Run order'), "admin/structure/types/manage/{$bundle}/automator-chain");
+    }
+    else {
+      $chain_link = l(t('Run order'), "admin/config/openai/field-automator/chain/{$entity_type}/{$bundle}");
+    }
+
+    $label = !empty($c['label']) ? $c['label'] : '';
+
+    $rows[] = [
+      check_plain($label),
+      check_plain($entity_type),
+      check_plain($bundle),
+      $field_cell,
+      check_plain($c['automator_type']),
+      check_plain($c['worker_type'] ?? 'direct'),
+      check_plain($c['weight'] ?? 0),
+      check_plain($c['model'] ?? ''),
+      $chain_link,
+    ];
+  }
+
+  if (empty($rows)) {
+    return '<p>' . t('No AI Automators configured yet. Edit any field on a content type to enable one.') . '</p>';
+  }
+
+  // Sort by entity_type, bundle, weight.
+  usort($rows, function ($a, $b) {
+    if ($a[1] !== $b[1]) return strcmp($a[1], $b[1]);
+    if ($a[2] !== $b[2]) return strcmp($a[2], $b[2]);
+    return (int) strip_tags($a[6]) - (int) strip_tags($b[6]);
+  });
+
+  return theme('table', [
+    'header' => [t('Label'), t('Entity type'), t('Bundle'), t('Field'), t('Automator type'), t('Worker'), t('Weight'), t('Model'), t('Run order')],
+    'rows'   => $rows,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Field instance edit form integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_form_FORM_ID_alter() for field_ui_field_edit_form.
+ */
+function openai_field_automator_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['#field']['field_name']) && $form['#field']['field_name'] === OpenAIFieldAutomatorStatusField::FIELD_NAME) {
+    // Avoid list.module default-value widget assumptions for this locked
+    // internal field.
+    $form['#instance']['default_value_function'] = 'openai_field_automator_status_default_value';
+  }
+
+  module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorFieldForm');
+  _openai_field_automator_field_edit_form_alter($form, $form_state);
+}
+
+/**
+ * Default value callback for the internal status field.
+ */
+function openai_field_automator_status_default_value($entity_type, $entity, $field, $instance, $langcode) {
+  return [
+    ['value' => OpenAIFieldAutomatorStatusField::STATUS_PENDING],
+  ];
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ *
+ * Adds an on-demand "Generate with AI" button to supported widgets when the
+ * destination field has an enabled automator configuration.
+ */
+function openai_field_automator_field_widget_form_alter(&$element, &$form_state, $context) {
+  module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorWidgetActions');
+  _openai_field_automator_field_widget_form_alter($element, $form_state, $context);
+}
+
+/**
+ * Submit callback wrapper for widget action button.
+ */
+function openai_field_automator_widget_action_submit($form, &$form_state) {
+  module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorWidgetActions');
+  _openai_field_automator_widget_action_submit($form, $form_state);
+}
+
+/**
+ * AJAX callback wrapper for widget action button.
+ */
+function openai_field_automator_widget_action_ajax($form, &$form_state) {
+  module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorWidgetActions');
+  return _openai_field_automator_widget_action_ajax($form, $form_state);
+}
+
+/**
+ * Validate callback proxy for field_ui_field_edit_form.
+ */
+function openai_field_automator_field_edit_form_validate($form, &$form_state) {
+  module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorFieldForm');
+  _openai_field_automator_field_edit_form_validate($form, $form_state);
+}
+
+/**
+ * Submit callback proxy for field_ui_field_edit_form.
+ */
+function openai_field_automator_field_edit_form_submit($form, &$form_state) {
+  module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorFieldForm');
+  _openai_field_automator_field_edit_form_submit($form, $form_state);
+
+  // Auto-create or remove the status field based on whether any automators
+  // are now configured on this bundle.
+  $instance = $form['#instance'];
+  if (!empty($instance['entity_type']) && !empty($instance['bundle'])) {
+    OpenAIFieldAutomatorStatusField::modifyStatusField($instance['entity_type'], $instance['bundle']);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup when a field instance is deleted
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_field_delete_instance().
+ */
+function openai_field_automator_field_delete_instance($instance) {
+  // Don't process deletion of the status field itself.
+  if ($instance['field_name'] === OpenAIFieldAutomatorStatusField::FIELD_NAME) {
+    return;
+  }
+
+  $key = 'openai_field_automator.'
+    . $instance['entity_type'] . '.'
+    . $instance['bundle'] . '.'
+    . $instance['field_name'];
+  $c = config($key);
+  if (!$c->isNew()) {
+    $c->delete();
+  }
+
+  // Check if the status field should be removed now.
+  OpenAIFieldAutomatorStatusField::modifyStatusField($instance['entity_type'], $instance['bundle']);
+}
+
+// ---------------------------------------------------------------------------
+// Entity save hooks
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_node_presave().
+ */
+function openai_field_automator_node_presave($node) {
+  if (!openai_field_automator_entity_can_save_toggle()) {
+    return;
+  }
+  if (openai_field_automator_is_queue_processing()) {
+    return;
+  }
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->processEntity('node', $node, ['workers' => ['direct', 'batch']]);
+}
+
+/**
+ * Implements hook_taxonomy_term_presave().
+ */
+function openai_field_automator_taxonomy_term_presave($term) {
+  if (!openai_field_automator_entity_can_save_toggle()) {
+    return;
+  }
+  if (openai_field_automator_is_queue_processing()) {
+    return;
+  }
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->processEntity('taxonomy_term', $term, ['workers' => ['direct', 'batch']]);
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function openai_field_automator_node_insert($node) {
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->enqueueEntity('node', $node);
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function openai_field_automator_node_update($node) {
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->enqueueEntity('node', $node);
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Adds post-save batch handling for worker_type=batch on node edit forms.
+ */
+function openai_field_automator_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['#node']) && is_object($form['#node'])) {
+    if (!in_array('openai_field_automator_node_form_capture_preview_submit', $form['#submit'], TRUE)) {
+      array_unshift($form['#submit'], 'openai_field_automator_node_form_capture_preview_submit');
+    }
+    if (!in_array('openai_field_automator_node_form_submit', $form['#submit'], TRUE)) {
+      $form['#submit'][] = 'openai_field_automator_node_form_submit';
+    }
+    module_load_include('inc', 'openai_field_automator', 'includes/OpenAIFieldAutomatorWidgetActions');
+    _openai_field_automator_node_form_add_taxonomy_widget_action_buttons($form, $form_state);
+  }
+}
+
+/**
+ * Node form pre-submit handler to capture unsaved rendered text context.
+ */
+function openai_field_automator_node_form_capture_preview_submit($form, &$form_state) {
+  $node = !empty($form_state['node']) && is_object($form_state['node']) ? $form_state['node'] : ($form['#node'] ?? NULL);
+  if (!$node || empty($node->type) || empty($form_state['values']) || !is_array($form_state['values'])) {
+    return;
+  }
+
+  $preview_text = openai_field_automator_extract_node_preview_text_from_form_state($form_state['values'], $node->type);
+  if ($preview_text !== '') {
+    $node->openai_field_automator_preview_text = $preview_text;
+    if (!empty($form_state['node']) && is_object($form_state['node'])) {
+      $form_state['node']->openai_field_automator_preview_text = $preview_text;
+    }
+  }
+}
+
+/**
+ * Node form submit handler for batch worker mode.
+ */
+function openai_field_automator_node_form_submit($form, &$form_state) {
+  if (empty($form_state['node']) || empty($form_state['node']->nid)) {
+    return;
+  }
+  $node = $form_state['node'];
+  $bundle = $node->type;
+
+  $instances = field_info_instances('node', $bundle);
+  if (empty($instances)) {
+    return;
+  }
+
+  $operations = [];
+  foreach (array_keys($instances) as $field_name) {
+    $config = openai_field_automator_load_field_config('node', $bundle, $field_name);
+    if (!empty($config['enabled']) && (($config['worker_type'] ?? 'direct') === 'batch')) {
+      $operations[] = ['openai_field_automator_batch_process_field', ['node', (int) $node->nid, $field_name]];
+    }
+  }
+
+  if (empty($operations)) {
+    return;
+  }
+
+  $batch = [
+    'title' => t('Running AI Automators'),
+    'operations' => $operations,
+    'finished' => 'openai_field_automator_batch_finished',
+    'progress_message' => t('Processed @current of @total fields...'),
+    'error_message' => t('AI Automator batch processing encountered an error.'),
+  ];
+  batch_set($batch);
+}
+
+/**
+ * Implements hook_taxonomy_term_insert().
+ */
+function openai_field_automator_taxonomy_term_insert($term) {
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->enqueueEntity('taxonomy_term', $term);
+}
+
+/**
+ * Implements hook_taxonomy_term_update().
+ */
+function openai_field_automator_taxonomy_term_update($term) {
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->enqueueEntity('taxonomy_term', $term);
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function openai_field_automator_cron_queue_info() {
+  return [
+    'openai_field_automator_queue' => [
+      'worker callback' => 'openai_field_automator_queue_worker',
+      'time' => 30,
+    ],
+  ];
+}
+
+/**
+ * Queue worker callback for queue/cron automator tasks.
+ */
+function openai_field_automator_queue_worker($data) {
+  $entity_type = $data['entity_type'] ?? '';
+  $entity_id = $data['entity_id'] ?? 0;
+  if (empty($entity_type) || empty($entity_id)) {
+    return;
+  }
+
+  $loaded = entity_load($entity_type, [$entity_id]);
+  $entity = $loaded ? reset($loaded) : NULL;
+  if (!$entity) {
+    return;
+  }
+
+  list(, , $bundle) = entity_extract_ids($entity_type, $entity);
+  if (empty($bundle)) {
+    return;
+  }
+
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->processEntity($entity_type, $entity, [
+    'workers' => ['queue_cron'],
+  ]);
+
+  // Avoid recursive queueing/presave loops when saving from queue worker.
+  openai_field_automator_entity_can_save_toggle(FALSE);
+  openai_field_automator_set_queue_processing(TRUE);
+  try {
+    if ($entity_type === 'node') {
+      node_save($entity);
+    }
+    elseif ($entity_type === 'taxonomy_term') {
+      taxonomy_term_save($entity);
+    }
+    elseif (method_exists($entity, 'save')) {
+      $entity->save();
+    }
+    else {
+      entity_get_controller($entity_type)->save($entity);
+    }
+  }
+  finally {
+    openai_field_automator_set_queue_processing(FALSE);
+    openai_field_automator_entity_can_save_toggle(TRUE);
+  }
+}
+
+/**
+ * Batch operation callback for one field.
+ */
+function openai_field_automator_batch_process_field($entity_type, $entity_id, $field_name, &$context) {
+  if ($entity_type !== 'node') {
+    return;
+  }
+  $node = node_load($entity_id);
+  if (!$node) {
+    return;
+  }
+
+  $runner = new OpenAIFieldAutomatorRunner();
+  $runner->processEntity('node', $node, [
+    'workers' => ['batch'],
+    'specific_field' => $field_name,
+  ]);
+
+  // Save without triggering automator presave recursion.
+  openai_field_automator_entity_can_save_toggle(FALSE);
+  try {
+    node_save($node);
+  }
+  finally {
+    openai_field_automator_entity_can_save_toggle(TRUE);
+  }
+
+  $context['message'] = t('Processed field @field', ['@field' => $field_name]);
+}
+
+/**
+ * Batch finished callback.
+ */
+function openai_field_automator_batch_finished($success, $results, $operations) {
+  if ($success) {
+    backdrop_set_message(t('AI Automator batch processing completed.'));
+  }
+  else {
+    backdrop_set_message(t('AI Automator batch processing failed.'), 'error');
+  }
+}
+
+/**
+ * Extracts aggregate unsaved text from node form values, including paragraphs.
+ */
+function openai_field_automator_extract_node_preview_text_from_form_state(array $values, $bundle) {
+  if (empty($bundle) || !function_exists('field_info_instances')) {
+    return '';
+  }
+
+  $chunks = [];
+  if (!empty($values['title']) && is_scalar($values['title'])) {
+    $title = trim(strip_tags((string) $values['title']));
+    if ($title !== '') {
+      $chunks[] = $title;
+    }
+  }
+
+  $instances = field_info_instances('node', $bundle);
+  foreach ($instances as $field_name => $instance) {
+    if (in_array($field_name, ['revision_log', 'revision_log_message'], TRUE)) {
+      continue;
+    }
+    if (empty($values[$field_name])) {
+      continue;
+    }
+    openai_field_automator_collect_text_recursive($values[$field_name], $chunks);
+  }
+
+  $chunks = array_values(array_unique(array_filter(array_map('trim', $chunks))));
+  return implode("\n\n", $chunks);
+}
+
+/**
+ * Recursively collects text fragments from nested form value arrays.
+ */
+function openai_field_automator_collect_text_recursive($value, array &$out) {
+  if (is_string($value)) {
+    // Strip tags then decode HTML entities so &nbsp; and similar don't appear
+    // verbatim in the collected text.
+    $candidate = trim(html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    if ($candidate !== '' && !preg_match('/^\d+$/', $candidate)) {
+      $out[] = $candidate;
+    }
+    return;
+  }
+
+  if (!is_array($value)) {
+    return;
+  }
+
+  $skip_keys = [
+    'format' => TRUE,
+    'summary_format' => TRUE,
+    // Skip the 'summary' sub-key of text_with_summary fields — it holds the
+    // manually-entered teaser text, which duplicates the main 'value' content.
+    'summary' => TRUE,
+    'weight' => TRUE,
+    'delta' => TRUE,
+    'item_id' => TRUE,
+    'revision_id' => TRUE,
+    'bundle' => TRUE,
+    'actions' => TRUE,
+    'add_more' => TRUE,
+    'remove' => TRUE,
+    'open' => TRUE,
+    '_weight' => TRUE,
+    'fid' => TRUE,
+    'uid' => TRUE,
+    'nid' => TRUE,
+    'tid' => TRUE,
+    'target_id' => TRUE,
+    'openai_field_automator_actions' => TRUE,
+  ];
+
+  foreach ($value as $key => $item) {
+    if (is_string($key) && isset($skip_keys[$key])) {
+      continue;
+    }
+    openai_field_automator_collect_text_recursive($item, $out);
+  }
+}
+
+/**
+ * Sets queue-processing guard flag for this request.
+ */
+function openai_field_automator_set_queue_processing($processing) {
+  $flag = &backdrop_static(__FUNCTION__, FALSE);
+  $flag = (bool) $processing;
+}
+
+/**
+ * Returns TRUE while queue worker is internally saving entities.
+ */
+function openai_field_automator_is_queue_processing() {
+  $flag = &backdrop_static('openai_field_automator_set_queue_processing', FALSE);
+  return (bool) $flag;
+}
+
+/**
+ * Global toggle for save-time automator processing.
+ *
+ * Similar to Drupal ai_automators save toggle behavior.
+ */
+function openai_field_automator_entity_can_save_toggle($new_toggle = NULL) {
+  $toggle = &backdrop_static(__FUNCTION__, TRUE);
+  if ($new_toggle !== NULL) {
+    $toggle = (bool) $new_toggle;
+  }
+  return (bool) $toggle;
+}
+
+// ---------------------------------------------------------------------------
+// Plugin registry
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all registered automator type definitions, cached for the request.
+ *
+ * Each definition array has keys:
+ *   - label       (string)  Human-readable name.
+ *   - description (string)  Optional.
+ *   - field_types (array)   Backdrop field type machine names this handles.
+ *   - class       (string)  PHP class name implementing OpenAIFieldAutomatorInterface.
+ *   - file        (string)  Absolute path to the file defining the class.
+ *
+ * Any module can add types via hook_openai_field_automator_type_info().
+ *
+ * @return array Keyed by plugin id.
+ */
+function openai_field_automator_get_types() {
+  $types = &backdrop_static(__FUNCTION__);
+  if (isset($types)) {
+    return $types;
+  }
+  $types = module_invoke_all('openai_field_automator_type_info');
+  backdrop_alter('openai_field_automator_type_info', $types);
+  return $types;
+}
+
+/**
+ * Instantiates an automator plugin by type id.
+ *
+ * @param string $type_id
+ * @param array $definition
+ *
+ * @return OpenAIFieldAutomatorInterface|null
+ */
+function openai_field_automator_load_plugin($type_id, array $definition) {
+  if (!empty($definition['file']) && file_exists($definition['file'])) {
+    require_once $definition['file'];
+  }
+  $class = $definition['class'];
+  if (!class_exists($class)) {
+    watchdog('openai_field_automator', 'Plugin class %class not found for type %id.', [
+      '%class' => $class,
+      '%id'    => $type_id,
+    ], WATCHDOG_ERROR);
+    return NULL;
+  }
+  return new $class();
+}
+
+// ---------------------------------------------------------------------------
+// Built-in plugin declarations
+// ---------------------------------------------------------------------------
+
+/**
+ * Implements hook_openai_field_automator_type_info().
+ */
+function openai_field_automator_openai_field_automator_type_info() {
+  $base = backdrop_get_path('module', 'openai_field_automator');
+  return [
+    'simple_text' => [
+      'label'       => t('Simple Text'),
+      'description' => t('Short AI response for text or string fields.'),
+      'field_types' => ['text', 'string', 'string_long'],
+      'class'       => 'OpenAIFieldAutomatorSimpleText',
+      'file'        => $base . '/includes/plugins/text/SimpleText.inc',
+    ],
+    'long_text' => [
+      'label'       => t('Long Text / Body'),
+      'description' => t('Longer AI response for text_long or body fields.'),
+      'field_types' => ['text_long', 'text_with_summary'],
+      'class'       => 'OpenAIFieldAutomatorLongText',
+      'file'        => $base . '/includes/plugins/text/LongText.inc',
+    ],
+    'text_create_summary' => [
+      'label'       => t('Create Summary'),
+      'description' => t('Generate only the summary for text_with_summary fields, leaving the body text untouched.'),
+      'field_types' => ['text_with_summary'],
+      'class'       => 'OpenAIFieldAutomatorTextCreateSummary',
+      'file'        => $base . '/includes/plugins/text/TextCreateSummary.inc',
+    ],
+    'boolean' => [
+      'label' => t('Boolean'),
+      'description' => t('Classify as true/false from context.'),
+      'field_types' => ['list_boolean', 'boolean'],
+      'class' => 'OpenAIFieldAutomatorBoolean',
+      'file' => $base . '/includes/plugins/scalar/Boolean.inc',
+    ],
+    'numeric' => [
+      'label' => t('Numeric'),
+      'description' => t('Extract numeric values from context.'),
+      'field_types' => ['number_integer', 'number_decimal', 'number_float', 'integer', 'decimal', 'float'],
+      'class' => 'OpenAIFieldAutomatorNumeric',
+      'file' => $base . '/includes/plugins/scalar/Numeric.inc',
+    ],
+    'date_extract' => [
+      'label' => t('Date Extract'),
+      'description' => t('Extract dates from text (any format) into date/datetime/datestamp fields. Handles inconsistent formats, relative dates, and optional end dates.'),
+      'field_types' => ['date', 'datetime', 'datestamp'],
+      'class' => 'OpenAIFieldAutomatorDateExtract',
+      'file' => $base . '/includes/plugins/scalar/DateExtract.inc',
+    ],
+    'email' => [
+      'label' => t('Email'),
+      'description' => t('Extract email addresses from context.'),
+      'field_types' => ['email'],
+      'class' => 'OpenAIFieldAutomatorEmail',
+      'file' => $base . '/includes/plugins/scalar/Email.inc',
+    ],
+    'telephone' => [
+      'label' => t('Telephone'),
+      'description' => t('Extract telephone numbers with country code.'),
+      'field_types' => ['telephone', 'phone'],
+      'class' => 'OpenAIFieldAutomatorTelephone',
+      'file' => $base . '/includes/plugins/scalar/Telephone.inc',
+    ],
+    'options' => [
+      'label' => t('List options'),
+      'description' => t('Select valid values from allowed list options.'),
+      'field_types' => ['list_text', 'list_integer', 'list_float'],
+      'class' => 'OpenAIFieldAutomatorOptions',
+      'file' => $base . '/includes/plugins/scalar/Options.inc',
+    ],
+    'taxonomy_terms' => [
+      'label' => t('Taxonomy terms'),
+      'description' => t('Generate taxonomy terms/tags from context and map to term IDs.'),
+      'field_types' => ['taxonomy_term_reference'],
+      'class' => 'OpenAIFieldAutomatorTaxonomyTerms',
+      'file' => $base . '/includes/plugins/reference/TaxonomyTerms.inc',
+    ],
+    'entity_reference' => [
+      'label' => t('Entity reference'),
+      'description' => t('Map generated values to existing referenceable entities.'),
+      'field_types' => ['entityreference'],
+      'class' => 'OpenAIFieldAutomatorEntityReference',
+      'file' => $base . '/includes/plugins/reference/EntityReference.inc',
+    ],
+    'link' => [
+      'label' => t('Link / URL'),
+      'description' => t('Extract URL and optional title into link fields.'),
+      'field_types' => ['link_field', 'link', 'url'],
+      'class' => 'OpenAIFieldAutomatorLink',
+      'file' => $base . '/includes/plugins/scalar/Link.inc',
+    ],
+    'text_to_image' => [
+      'label' => t('Text to image'),
+      'description' => t('Generate images from prompt text into image/file fields.'),
+      'field_types' => ['image', 'file'],
+      'class' => 'OpenAIFieldAutomatorTextToImage',
+      'file' => $base . '/includes/plugins/media/TextToImage.inc',
+    ],
+    'image_alt_text' => [
+      'label' => t('Image ALT text'),
+      'description' => t('Generate alt text for images.'),
+      'field_types' => ['image'],
+      'class' => 'OpenAIFieldAutomatorImageAltText',
+      'file' => $base . '/includes/plugins/media/ImageAltText.inc',
+    ],
+    'audio_to_text' => [
+      'label' => t('Audio to text'),
+      'description' => t('Transcribe source audio files into text fields.'),
+      'field_types' => ['text', 'text_long', 'text_with_summary', 'string', 'string_long'],
+      'class' => 'OpenAIFieldAutomatorAudioToText',
+      'file' => $base . '/includes/plugins/media/AudioToText.inc',
+    ],
+    'text_to_speech' => [
+      'label' => t('Text to speech'),
+      'description' => t('Generate speech audio files from text prompts.'),
+      'field_types' => ['file'],
+      'class' => 'OpenAIFieldAutomatorTextToSpeech',
+      'file' => $base . '/includes/plugins/media/TextToSpeech.inc',
+    ],
+    'video_to_text' => [
+      'label' => t('Video to text'),
+      'description' => t('Transcribe speech from source video files into text fields.'),
+      'field_types' => ['text', 'text_long', 'text_with_summary', 'string', 'string_long'],
+      'class' => 'OpenAIFieldAutomatorVideoToText',
+      'file' => $base . '/includes/plugins/media/VideoToText.inc',
+    ],
+    'json_field' => [
+      'label' => t('JSON field'),
+      'description' => t('Generate structured JSON output.'),
+      'field_types' => ['json', 'text_long', 'string_long'],
+      'class' => 'OpenAIFieldAutomatorJsonStructured',
+      'file' => $base . '/includes/plugins/structured/JsonStructured.inc',
+    ],
+    'json_native_field' => [
+      'label' => t('JSON native field'),
+      'description' => t('Generate structured JSON output for json_native fields.'),
+      'field_types' => ['json_native'],
+      'class' => 'OpenAIFieldAutomatorJsonStructured',
+      'file' => $base . '/includes/plugins/structured/JsonStructured.inc',
+    ],
+    'json_native_binary_field' => [
+      'label' => t('JSON native binary field'),
+      'description' => t('Generate structured JSON output for json_native_binary fields.'),
+      'field_types' => ['json_native_binary'],
+      'class' => 'OpenAIFieldAutomatorJsonStructured',
+      'file' => $base . '/includes/plugins/structured/JsonStructured.inc',
+    ],
+    'metatag' => [
+      'label' => t('Metatag'),
+      'description' => t('Generate JSON blob values for metatag fields.'),
+      'field_types' => ['metatag'],
+      'class' => 'OpenAIFieldAutomatorMetatag',
+      'file' => $base . '/includes/plugins/structured/Metatag.inc',
+    ],
+    'moderation_state' => [
+      'label' => t('Moderation state'),
+      'description' => t('Classify content into moderation states based on context.'),
+      'field_types' => ['string', 'list_text'],
+      'field_names' => ['moderation_state'],
+      'class' => 'OpenAIFieldAutomatorModerationState',
+      'file' => $base . '/includes/plugins/structured/ModerationState.inc',
+    ],
+    'address' => [
+      'label' => t('Address'),
+      'description' => t('Extract structured address components from text context.'),
+      'field_types' => ['address', 'addressfield'],
+      'class' => 'OpenAIFieldAutomatorAddress',
+      'file' => $base . '/includes/plugins/domain/Address.inc',
+    ],
+    'office_hours' => [
+      'label' => t('Office hours'),
+      'description' => t('Extract office/opening hours into structured office-hours fields.'),
+      'field_types' => ['office_hours', 'officehours'],
+      'class' => 'OpenAIFieldAutomatorOfficeHours',
+      'file' => $base . '/includes/plugins/domain/OfficeHours.inc',
+    ],
+    'faq_field' => [
+      'label' => t('FAQ field'),
+      'description' => t('Generate question/answer pairs from context.'),
+      'field_types' => ['faqfield'],
+      'class' => 'OpenAIFieldAutomatorFaqField',
+      'file' => $base . '/includes/plugins/domain/FaqField.inc',
+    ],
+    'chart_from_text' => [
+      'label' => t('Chart from text'),
+      'description' => t('Generate chart-ready table/CSV data from context text.'),
+      'field_types' => ['chart_config'],
+      'class' => 'OpenAIFieldAutomatorChartFromText',
+      'file' => $base . '/includes/plugins/domain/ChartFromText.inc',
+    ],
+    'media_image_generation' => [
+      'label' => t('Media image generation'),
+      'description' => t('Generate images and store them as referenced file/media entities.'),
+      'field_types' => ['entityreference'],
+      'target_types' => ['file', 'media'],
+      'class' => 'OpenAIFieldAutomatorMediaImageGeneration',
+      'file' => $base . '/includes/plugins/media/MediaImageGeneration.inc',
+    ],
+    'media_audio_generation' => [
+      'label' => t('Media audio generation'),
+      'description' => t('Generate speech audio and store as referenced file/media entities.'),
+      'field_types' => ['entityreference'],
+      'target_types' => ['file', 'media'],
+      'class' => 'OpenAIFieldAutomatorMediaAudioGeneration',
+      'file' => $base . '/includes/plugins/media/MediaAudioGeneration.inc',
+    ],
+    'rewrite_image_filename' => [
+      'label' => t('Rewrite image filename'),
+      'description' => t('Renames image/file assets to AI-generated SEO-friendly filenames.'),
+      'field_types' => ['image', 'file'],
+      'class' => 'OpenAIFieldAutomatorRewriteImageFilename',
+      'file' => $base . '/includes/plugins/media/RewriteImageFilename.inc',
+    ],
+    'video_to_html' => [
+      'label' => t('Video to HTML'),
+      'description' => t('Transcribe video audio and generate HTML content.'),
+      'field_types' => ['text_long', 'text_with_summary', 'string_long'],
+      'class' => 'OpenAIFieldAutomatorVideoToHtml',
+      'file' => $base . '/includes/plugins/media/VideoToHtml.inc',
+    ],
+    'video_to_image' => [
+      'label' => t('Video to image'),
+      'description' => t('Generate representative images from video transcript context.'),
+      'field_types' => ['image', 'file'],
+      'class' => 'OpenAIFieldAutomatorVideoToImage',
+      'file' => $base . '/includes/plugins/media/VideoToImage.inc',
+    ],
+    'video_to_video' => [
+      'label' => t('Video to video'),
+      'description' => t('Cut and combine video segments based on AI-selected timestamps.'),
+      'field_types' => ['file'],
+      'class' => 'OpenAIFieldAutomatorVideoToVideo',
+      'file' => $base . '/includes/plugins/media/VideoToVideo.inc',
+    ],
+    'vector_search_text' => [
+      'label' => t('Vector search: text'),
+      'description' => t('Use a Search API AI index to retrieve semantically similar text snippets.'),
+      'field_types' => ['text', 'text_long', 'text_with_summary', 'string', 'string_long'],
+      'class' => 'OpenAIFieldAutomatorVectorSearchText',
+      'file' => $base . '/includes/plugins/search/VectorSearchText.inc',
+      'requires_model' => FALSE,
+    ],
+    'vector_search_entity_reference' => [
+      'label' => t('Vector search: entity reference'),
+      'description' => t('Use a Search API AI index to map semantically similar content to referenced entities.'),
+      'field_types' => ['entityreference'],
+      'class' => 'OpenAIFieldAutomatorVectorSearchEntityReference',
+      'file' => $base . '/includes/plugins/search/VectorSearchEntityReference.inc',
+      'requires_model' => FALSE,
+    ],
+    'views_extract_text' => [
+      'label' => t('Views: text extract'),
+      'description' => t('Execute a configured View and store its rendered output as text.'),
+      'field_types' => ['text', 'text_long', 'text_with_summary', 'string', 'string_long'],
+      'class' => 'OpenAIFieldAutomatorViewsExtractor',
+      'file' => $base . '/includes/plugins/search/ViewsExtractor.inc',
+      'requires_model' => FALSE,
+      'requires_prompt' => FALSE,
+      'requires_base_field' => FALSE,
+    ],
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Config helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Loads the automator config for a specific field instance.
+ * Result is statically cached; reset with backdrop_static_reset().
+ *
+ * @param string $entity_type
+ * @param string $bundle
+ * @param string $field_name
+ *
+ * @return array|null  Config data array, or NULL if not configured.
+ */
+function openai_field_automator_load_field_config($entity_type, $bundle, $field_name) {
+  $cache = &backdrop_static(__FUNCTION__, []);
+  $key   = $entity_type . '.' . $bundle . '.' . $field_name;
+  if (!array_key_exists($key, $cache)) {
+    $cache[$key] = config_get('openai_field_automator.' . $key) ?: NULL;
+  }
+  return $cache[$key];
+}
+
+/**
+ * Returns provider-grouped model options for a select element.
+ *
+ * Returns a nested array [Provider Label => [provider/model_id => label]]
+ * which Backdrop renders as <optgroup> elements in the select widget.
+ * The stored value is the fully-qualified "provider/model_id" string that
+ * openai_chat() and openai_get_api_for_model() already understand.
+ */
+function openai_field_automator_model_options($automator_type = '') {
+  $callback = 'openai_get_all_chat_models';
+  if (in_array($automator_type, ['text_to_image', 'media_image_generation', 'video_to_image'], TRUE)) {
+    $callback = 'openai_get_all_image_models';
+  }
+  elseif (in_array($automator_type, ['text_to_speech', 'media_audio_generation'], TRUE)) {
+    $callback = 'openai_get_all_tts_models';
+  }
+  elseif (in_array($automator_type, ['audio_to_text', 'video_to_text'], TRUE)) {
+    $callback = 'openai_get_all_models';
+  }
+
+  if (!function_exists($callback)) {
+    return [];
+  }
+  try {
+    return $callback();
+  }
+  catch (Exception $e) {
+    watchdog('openai_field_automator', 'Could not load model list: @msg', ['@msg' => $e->getMessage()], WATCHDOG_WARNING);
+    return [];
+  }
+}
+
+/**
+ * Ensures Backdrop core token functions are available.
+ *
+ * @return bool
+ *   TRUE if token replacement support is available.
+ */
+function openai_field_automator_tokens_available() {
+  if (!function_exists('token_replace')) {
+    require_once BACKDROP_ROOT . '/core/includes/token.inc';
+  }
+  return function_exists('token_replace');
+}
+
+/**
+ * Renders a token-based prompt for an entity, if token support is available.
+ *
+ * @param string $template
+ *   Token template.
+ * @param object $entity
+ *   Entity object.
+ * @param string $entity_type
+ *   Entity type machine name.
+ *
+ * @return string
+ *   Rendered prompt string (or original template if Token is unavailable).
+ */
+function openai_field_automator_render_token_prompt($template, $entity, $entity_type) {
+  if (!openai_field_automator_tokens_available()) {
+    return $template;
+  }
+
+  $token_type = ($entity_type === 'taxonomy_term') ? 'term' : $entity_type;
+  $data = [$token_type => $entity];
+  return token_replace($template, $data, ['clear' => TRUE]);
+}
+
+/**
+ * Removes generated values rejected by a plugin verifier.
+ *
+ * @param OpenAIFieldAutomatorInterface $plugin
+ *   Plugin instance.
+ * @param object $entity
+ *   Entity being processed.
+ * @param string $field_name
+ *   Destination field name.
+ * @param array $config
+ *   Automator config.
+ * @param array $values
+ *   Generated values.
+ *
+ * @return array
+ *   Filtered values array.
+ */
+function openai_field_automator_filter_generated_values($plugin, $entity, $field_name, array $config, array $values) {
+  if (!$plugin || !method_exists($plugin, 'verifyValue')) {
+    return $values;
+  }
+
+  foreach ($values as $key => $value) {
+    if (!$plugin->verifyValue($entity, $value, $field_name, $config)) {
+      unset($values[$key]);
+    }
+  }
+
+  return array_values($values);
+}

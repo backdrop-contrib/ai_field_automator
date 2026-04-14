@@ -1,0 +1,11 @@
+name = OpenAI Field Automator
+description = Automatically populates entity fields with AI-generated content when content is saved. Configure per-field prompts, models, and rules.
+backdrop = 1.x
+type = module
+package = OpenAI
+php = 8.2
+configure = admin/config/openai/field-automator
+
+dependencies[] = openai
+dependencies[] = field_ui
+dependencies[] = list
