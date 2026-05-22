@@ -1,49 +1,68 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\media;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Rewrites existing image/file filenames using AI.
  */
-class OpenAIFieldAutomatorRewriteImageFilename extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorRewriteImageFilename extends
+  AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Rewrites existing file names to descriptive, SEO-friendly values.');
+    return t(
+      'Rewrites existing file names to descriptive, SEO-friendly values.'
+    );
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('image', 'file');
+    return ['image', 'file'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedInputs() {
-    return array('image', 'file');
+    return ['image', 'file'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function generate($entity, $field_name, array $config) {
-    $source_field = !empty($config['base_field']) ? $config['base_field'] : $field_name;
+    $source_field = !empty($config['base_field']) ? $config['base_field']
+      : $field_name;
     if (empty($entity->{$source_field}[LANGUAGE_NONE])) {
-      return array();
+      return [];
     }
 
-    $instruction = trim((string) ($config['prompt'] ?? 'Rewrite this file name to be descriptive, lowercase, hyphen-separated, and without extension.'));
+    $instruction = trim(
+      (string) ($config['prompt'] ??
+        'Rewrite this file name to be descriptive, lowercase, hyphen-separated, and without extension.')
+    );
     if (($config['mode'] ?? 'base') === 'token' && !empty($config['token'])) {
-      $instruction = trim((string) openai_field_automator_render_token_prompt($config['token'], $entity, $config['entity_type'] ?? ''));
+      $instruction = trim(
+        (string) ai_field_automator_render_token_prompt(
+          $config['token'],
+          $entity,
+          $config['entity_type'] ?? ''
+        )
+      );
     }
     if ($instruction === '') {
-      $instruction = 'Rewrite this file name to be descriptive, lowercase, hyphen-separated, and without extension.';
+      $instruction
+        = 'Rewrite this file name to be descriptive, lowercase, hyphen-separated, and without extension.';
     }
 
-    $values = array();
+    $values = [];
     foreach ($entity->{$source_field}[LANGUAGE_NONE] as $item) {
       if (empty($item['fid'])) {
         continue;
@@ -71,10 +90,10 @@ class OpenAIFieldAutomatorRewriteImageFilename extends OpenAIFieldAutomatorBase 
       if ($new_name === '') {
         $new_name = $filename_no_ext;
       }
-      $values[] = array(
+      $values[] = [
         'fid' => (int) $file->fid,
         'filename' => $this->sanitizeFilenameStem($new_name),
-      );
+      ];
     }
 
     return $values;
@@ -83,7 +102,12 @@ class OpenAIFieldAutomatorRewriteImageFilename extends OpenAIFieldAutomatorBase 
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($entity->{$field_name}[LANGUAGE_NONE]) || empty($values)) {
       return;
     }
@@ -96,7 +120,9 @@ class OpenAIFieldAutomatorRewriteImageFilename extends OpenAIFieldAutomatorBase 
       $candidate = $values[$delta] ?? NULL;
       if (!$candidate) {
         foreach ($values as $value) {
-          if (!empty($value['fid']) && (int) $value['fid'] === (int) $item['fid']) {
+          if (!empty($value['fid'])
+            && (int) $value['fid'] === (int) $item['fid']
+          ) {
             $candidate = $value;
             break;
           }
@@ -111,13 +137,14 @@ class OpenAIFieldAutomatorRewriteImageFilename extends OpenAIFieldAutomatorBase 
         continue;
       }
       $extension = pathinfo($file->filename, PATHINFO_EXTENSION);
-      $target_name = $candidate['filename'] . ($extension ? '.' . $extension : '');
+      $target_name = $candidate['filename'] . ($extension ? '.' . $extension
+          : '');
 
       $parts = explode('://', $file->uri, 2);
       if (count($parts) !== 2) {
         continue;
       }
-      list($scheme, $target) = $parts;
+      [$scheme, $target] = $parts;
       $dir = dirname($target);
       if ($dir === '.' || $dir === DIRECTORY_SEPARATOR) {
         $new_uri = $scheme . '://' . $target_name;

@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\media;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Transcribes audio file fields into text-based target fields.
  */
-class OpenAIFieldAutomatorAudioToText extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorAudioToText extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,14 +21,14 @@ class OpenAIFieldAutomatorAudioToText extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('text', 'text_long', 'text_with_summary', 'string', 'string_long');
+    return ['text', 'text_long', 'text_with_summary', 'string', 'string_long'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedInputs() {
-    return array('file');
+    return ['file'];
   }
 
   /**
@@ -32,18 +37,19 @@ class OpenAIFieldAutomatorAudioToText extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $base = !empty($config['base_field']) ? $config['base_field'] : '';
     if ($base === '' || empty($entity->{$base})) {
-      return array();
+      return [];
     }
 
-    $model = !empty($config['model']) ? $config['model'] : 'openai/whisper-1';
+    $model = !empty($config['model']) ? $config['model'] : (config_get('ai.settings', 'default_stt_model') ?: 'whisper-1');
     $stripped_model = '';
-    $api = openai_get_api_for_model($model, $stripped_model);
+    $api = ai_get_api_for_model($model, $stripped_model);
     if (!$api) {
-      return array();
+      return [];
     }
 
-    $task = !empty($config['speech_task']) ? $config['speech_task'] : 'transcribe';
-    $values = array();
+    $task = !empty($config['speech_task']) ? $config['speech_task']
+      : 'transcribe';
+    $values = [];
     foreach ($entity->{$base} as $lang_items) {
       if (!is_array($lang_items)) {
         continue;

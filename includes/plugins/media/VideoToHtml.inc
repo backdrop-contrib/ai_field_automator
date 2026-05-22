@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\media;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Transcribes videos and generates HTML content.
  */
-class OpenAIFieldAutomatorVideoToHtml extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorVideoToHtml extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,14 +21,14 @@ class OpenAIFieldAutomatorVideoToHtml extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('text_long', 'text_with_summary', 'string_long');
+    return ['text_long', 'text_with_summary', 'string_long'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedInputs() {
-    return array('file');
+    return ['file'];
   }
 
   /**
@@ -32,25 +37,37 @@ class OpenAIFieldAutomatorVideoToHtml extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $base_field = $config['base_field'] ?? '';
     if ($base_field === '' || empty($entity->{$base_field}[LANGUAGE_NONE])) {
-      return array();
+      return [];
     }
 
-    $speech_model = $config['speech_model'] ?? 'openai/whisper-1';
+    $speech_model = $config['speech_model'] ?? (config_get('ai.settings', 'default_stt_model') ?: 'whisper-1');
     $stripped_speech_model = '';
-    $speech_api = openai_get_api_for_model($speech_model, $stripped_speech_model);
+    $speech_api = ai_get_api_for_model(
+      $speech_model,
+      $stripped_speech_model
+    );
     if (!$speech_api) {
-      return array();
+      return [];
     }
 
-    $instruction = trim((string) ($config['prompt'] ?? 'Generate HTML content based on the transcript.'));
+    $instruction = trim(
+      (string) ($config['prompt'] ??
+        'Generate HTML content based on the transcript.')
+    );
     if (($config['mode'] ?? 'base') === 'token' && !empty($config['token'])) {
-      $instruction = trim((string) openai_field_automator_render_token_prompt($config['token'], $entity, $config['entity_type'] ?? ''));
+      $instruction = trim(
+        (string) ai_field_automator_render_token_prompt(
+          $config['token'],
+          $entity,
+          $config['entity_type'] ?? ''
+        )
+      );
     }
     if ($instruction === '') {
       $instruction = 'Generate HTML content based on the transcript.';
     }
 
-    $values = array();
+    $values = [];
     foreach ($entity->{$base_field}[LANGUAGE_NONE] as $item) {
       if (empty($item['fid'])) {
         continue;
@@ -67,7 +84,11 @@ class OpenAIFieldAutomatorVideoToHtml extends OpenAIFieldAutomatorBase {
         continue;
       }
 
-      $transcript = $speech_api->speechToText($stripped_speech_model ?: $speech_model, $path, 'transcribe');
+      $transcript = $speech_api->speechToText(
+        $stripped_speech_model ?: $speech_model,
+        $path,
+        'transcribe'
+      );
       if (!is_string($transcript) || trim($transcript) === '') {
         continue;
       }
@@ -84,4 +105,3 @@ class OpenAIFieldAutomatorVideoToHtml extends OpenAIFieldAutomatorBase {
   }
 
 }
-

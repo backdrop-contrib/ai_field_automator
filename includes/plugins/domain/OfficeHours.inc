@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\domain;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Automator for office-hours fields.
  */
-class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorOfficeHours extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,7 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('office_hours', 'officehours');
+    return ['office_hours', 'officehours'];
   }
 
   /**
@@ -25,12 +30,12 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
-      return array();
+      return [];
     }
 
-    $values = array();
+    $values = [];
     foreach ($prompts as $prompt) {
-      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"day\":\"1-7 (1=Monday)\",\"starthours\":\"HHMM\",\"endhours\":\"HHMM\"}}]";
+      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"day\":\"1-7 (1=Monday]\",\"starthours\":\"HHMM\",\"endhours\":\"HHMM\"}}]";
       $prompt .= "\nOnly include days that are open.";
       $text = $this->callAI($prompt, $config);
       if ($text === '') {
@@ -42,7 +47,7 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
         continue;
       }
       if ($this->isAssoc($rows)) {
-        $rows = array($rows);
+        $rows = [$rows];
       }
 
       foreach ($rows as $row) {
@@ -50,14 +55,28 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
         if (!is_array($candidate)) {
           continue;
         }
-        if (empty($candidate['day']) || empty($candidate['starthours']) || empty($candidate['endhours'])) {
+        if (empty($candidate['day']) || empty($candidate['starthours'])
+          || empty($candidate['endhours'])
+        ) {
           continue;
         }
-        $values[] = array(
-          'day' => preg_replace('/[^0-9]/', '', (string) $candidate['day']),
-          'starthours' => preg_replace('/[^0-9]/', '', (string) $candidate['starthours']),
-          'endhours' => preg_replace('/[^0-9]/', '', (string) $candidate['endhours']),
-        );
+        $values[] = [
+          'day' => preg_replace(
+            '/[^0-9]/',
+            '',
+            (string) $candidate['day']
+          ),
+          'starthours' => preg_replace(
+            '/[^0-9]/',
+            '',
+            (string) $candidate['starthours']
+          ),
+          'endhours' => preg_replace(
+            '/[^0-9]/',
+            '',
+            (string) $candidate['endhours']
+          ),
+        ];
       }
     }
 
@@ -67,7 +86,12 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
@@ -78,12 +102,15 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
     }
 
     $columns = array_keys($field_info['columns']);
-    $items = array();
+    $items = [];
     foreach ($values as $value) {
-      $item = array();
-      $item[$this->findColumn($columns, array('day', 'weekday', 'dow'), 0)] = (int) ($value['day'] ?? 0);
-      $item[$this->findColumn($columns, array('starthours', 'start', 'open'), 1)] = (int) ($value['starthours'] ?? 0);
-      $item[$this->findColumn($columns, array('endhours', 'end', 'close'), 2)] = (int) ($value['endhours'] ?? 0);
+      $item = [];
+      $item[$this->findColumn($columns, ['day', 'weekday', 'dow'], 0)]
+        = (int) ($value['day'] ?? 0);
+      $item[$this->findColumn($columns, ['starthours', 'start', 'open'], 1)]
+        = (int) ($value['starthours'] ?? 0);
+      $item[$this->findColumn($columns, ['endhours', 'end', 'close'], 2)]
+        = (int) ($value['endhours'] ?? 0);
       $items[] = $item;
     }
 
@@ -93,16 +120,23 @@ class OpenAIFieldAutomatorOfficeHours extends OpenAIFieldAutomatorBase {
   /**
    * Finds first matching column by keyword.
    */
-  protected function findColumn(array $columns, array $keywords, $fallback_index = 0) {
+  protected function findColumn(
+    array $columns,
+    array $keywords,
+    $fallback_index = 0
+  ) {
     foreach ($columns as $column) {
       $norm = preg_replace('/[^a-z0-9]/', '', strtolower($column));
       foreach ($keywords as $keyword) {
-        if (strpos($norm, preg_replace('/[^a-z0-9]/', '', strtolower($keyword))) !== FALSE) {
+        if (strpos($norm, preg_replace('/[^a-z0-9]/', '', strtolower($keyword)))
+          !== FALSE
+        ) {
           return $column;
         }
       }
     }
-    return isset($columns[$fallback_index]) ? $columns[$fallback_index] : $columns[0];
+    return isset($columns[$fallback_index]) ? $columns[$fallback_index]
+      : $columns[0];
   }
 
   /**

@@ -1,0 +1,127 @@
+<?php
+
+/**
+ * @file
+ * Tests for Track 2 (AgentField plugin) and Track 3 (regenerate_field tool).
+ */
+
+class AIFieldAutomatorAgentPluginTestCase extends BackdropWebTestCase {
+
+  public function setUp() {
+    parent::setUp([
+      'ai',
+      'ai_tools',
+      'ai_agent',
+      'ai_agent_test',
+      'ai_field_automator',
+    ]);
+
+    $providers = config('ai.settings');
+    $providers->set('providers', [
+      'agent_test' => ['enabled' => 1],
+    ]);
+    $providers->save();
+
+    ai_agent_save_agents([
+      'automator_agent' => [
+        'label'                 => 'Automator Test Agent',
+        'description'           => 'Agent for field automator tests.',
+        'system_prompt'         => 'You are a field automator agent.',
+        'secured_system_prompt' => 'Return final answer only.',
+        'model'                 => 'agent_test/gpt-4o-mini',
+        'temperature'           => 0.0,
+        'max_tokens'            => 128,
+        'max_loops'             => 3,
+        'tools'                 => ['test_echo_message'],
+      ],
+    ]);
+  }
+
+  /**
+   * AgentField::generate() returns the agent answer as a single-element array.
+   */
+  public function testAgentFieldPluginReturnsAnswer() {
+    $entity = (object) [
+      'title'    => 'Test title',
+      'nid'      => NULL,
+    ];
+    $config = [
+      'entity_type' => 'node',
+      'agent_id'    => 'automator_agent',
+      'agent_task'  => 'Write a short summary.',
+      'base_field'  => '_title',
+    ];
+
+    $plugin = new ai_field_automator\includes\plugins\agent\AIFieldAutomatorAgentField();
+    $values = $plugin->generate($entity, 'field_summary', $config);
+
+    $this->assertFalse(empty($values), 'AgentField plugin returned at least one value.');
+    $this->assertTrue(is_string($values[0]), 'Returned value is a string.');
+  }
+
+  /**
+   * AgentField::generate() returns [] when agent_id is missing.
+   */
+  public function testAgentFieldPluginSkipsWhenNoAgentId() {
+    $entity = (object) ['title' => 'Test'];
+    $config = ['entity_type' => 'node', 'agent_id' => ''];
+
+    $plugin = new ai_field_automator\includes\plugins\agent\AIFieldAutomatorAgentField();
+    $values = $plugin->generate($entity, 'field_summary', $config);
+
+    $this->assertEqual([], $values, 'AgentField returns empty array when no agent_id is set.');
+  }
+
+  /**
+   * AgentField plugin is registered in the type registry.
+   */
+  public function testAgentFieldPluginIsRegistered() {
+    $types = ai_field_automator_get_types();
+    $this->assertTrue(isset($types['agent_field']), 'agent_field plugin type is registered.');
+    $this->assertEqual(
+      'ai_field_automator\includes\plugins\agent\AIFieldAutomatorAgentField',
+      $types['agent_field']['class'],
+      'agent_field class is correct.'
+    );
+  }
+}
+
+class AIFieldAutomatorRegenerateToolTestCase extends BackdropWebTestCase {
+
+  public function setUp() {
+    parent::setUp([
+      'ai',
+      'ai_tools',
+      'ai_agent',
+      'ai_agent_test',
+      'ai_field_automator',
+    ]);
+  }
+
+  /**
+   * regenerate_field tool is registered in ai_tools registry.
+   */
+  public function testRegenerateFieldToolRegistered() {
+    $tools = ai_tools_get_tools();
+    $this->assertTrue(isset($tools['regenerate_field']), 'regenerate_field tool is registered.');
+    $this->assertEqual('write', $tools['regenerate_field']['operation'], 'Tool is marked as write operation.');
+  }
+
+  /**
+   * Executor returns JSON error when nid is missing.
+   */
+  public function testRegenerateFieldExecutorRequiresNid() {
+    $result = ai_field_automator_tool_regenerate_field(['field_name' => 'field_summary']);
+    $data   = json_decode($result, TRUE);
+    $this->assertTrue(!empty($data['error']), 'Executor returns error when nid is missing.');
+  }
+
+  /**
+   * Executor returns JSON error when node does not exist.
+   */
+  public function testRegenerateFieldExecutorHandlesMissingNode() {
+    $result = ai_field_automator_tool_regenerate_field(['nid' => 999999, 'field_name' => 'field_summary']);
+    $data   = json_decode($result, TRUE);
+    $this->assertTrue(!empty($data['error']), 'Executor returns error for non-existent node.');
+  }
+}

@@ -1,5 +1,6 @@
 <?php
 
+
 /**
  * @file
  * Form alter and submit logic for the field instance edit form.
@@ -7,15 +8,15 @@
  * When editing any field under Structure > Content Types > [type] > Manage
  * fields, an "AI Automator" section is added at the bottom.  On save it
  * writes (or deletes) a per-field config object:
- *   openai_field_automator.{entity_type}.{bundle}.{field_name}
+ *   ai_field_automator.{entity_type}.{bundle}.{field_name}
  */
 
 /**
  * Alter hook: adds the AI Automator fieldset to field_ui_field_edit_form.
  *
- * @see openai_field_automator_form_field_ui_field_edit_form_alter()
+ * @see ai_field_automator_form_field_ui_field_edit_form_alter()
  */
-function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
+function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   $field    = $form['#field'];
   $instance = $form['#instance'];
 
@@ -27,7 +28,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   // Find automator plugins that support this field type.
   $matching_types = [];
   $field_target_type = $field['settings']['target_type'] ?? NULL;
-  foreach (openai_field_automator_get_types() as $tid => $tdef) {
+  foreach (ai_field_automator_get_types() as $tid => $tdef) {
     if (in_array($field_type, $tdef['field_types'])) {
       if (!empty($tdef['field_names']) && !in_array($field_name, $tdef['field_names'], TRUE)) {
         continue;
@@ -46,7 +47,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   }
 
   // Load existing config for this field (if any).
-  $config = openai_field_automator_load_field_config($entity_type, $bundle, $field_name);
+  $config = ai_field_automator_load_field_config($entity_type, $bundle, $field_name);
   $config = is_array($config) ? $config : [];
   $enabled = !empty($config['enabled']);
   $current_enabled = isset($form_state['values']['automator_enabled'])
@@ -73,7 +74,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title'         => t('Enable AI Automator for this field'),
     '#default_value' => $current_enabled,
     '#ajax'          => [
-      'callback' => 'openai_field_automator_enabled_ajax',
+      'callback' => 'ai_field_automator_enabled_ajax',
       'wrapper'  => 'ai-automator-fieldset',
     ],
   ];
@@ -81,7 +82,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   $form['ai_automator']['automator_label'] = [
     '#type'          => 'textfield',
     '#title'         => t('Automator label'),
-    '#description'   => t('A human-readable name for this automator (e.g. "Auto-generate tags"). Shown in the Run Order tab.'),
+    '#description'   => t('A human-readable name for this automator (e.g. "Auto-generate tags"]. Shown in the Run Order tab.'),
     '#default_value' => $config['label'] ?? '',
     '#maxlength'     => 255,
     '#access'        => $current_enabled,
@@ -100,19 +101,21 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#options'       => $matching_types,
     '#default_value' => $chosen_type,
     '#ajax'          => [
-      'callback' => 'openai_field_automator_type_ajax',
+      'callback' => 'ai_field_automator_type_ajax',
       'wrapper'  => 'automator-settings-wrapper',
     ],
   ];
 
   // Show help text for the chosen type.
-  $types = openai_field_automator_get_types();
+  $types = ai_field_automator_get_types();
   $type_definition = $types[$chosen_type] ?? [];
   $requires_model = !array_key_exists('requires_model', $type_definition) || !empty($type_definition['requires_model']);
   $requires_prompt = !array_key_exists('requires_prompt', $type_definition) || !empty($type_definition['requires_prompt']);
   $requires_base_field = !array_key_exists('requires_base_field', $type_definition) || !empty($type_definition['requires_base_field']);
+  $chosen_model = $form_state['values']['automator_model']
+    ?? ($config['model'] ?? '');
 
-  $plugin = openai_field_automator_load_plugin($chosen_type, $types[$chosen_type]);
+  $plugin = ai_field_automator_load_plugin($chosen_type, $types[$chosen_type]);
   if ($plugin && $plugin->helpText()) {
     $form['ai_automator']['settings_wrapper']['automator_help'] = [
       '#markup' => '<p class="description">' . check_plain($plugin->helpText()) . '</p>',
@@ -129,14 +132,14 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     }
     $fi = field_info_field($fname);
     if (empty($allowed_inputs) || in_array($fi['type'], $allowed_inputs)) {
-      $base_options[$fname] = $finstance['label'] . ' (' . $fname . ')';
+      $base_options[$fname] = $finstance['label'] . ' (' . $fname . ']';
     }
   }
   // Always include the node title as a context source.
   $base_options['_title'] = t('Title / Label');
   $base_options['_rendered_entity'] = ($entity_type === 'node')
-    ? t('Rendered node text (all fields + paragraphs)')
-    : t('Rendered entity text (all fields)');
+    ? t('Rendered node text (all fields + paragraphs]')
+    : t('Rendered entity text (all fields]');
 
   $mode_options = [
     'base' => t('Base mode'),
@@ -171,7 +174,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
 
   $form['ai_automator']['settings_wrapper']['automator_base_field'] = [
     '#type'          => 'select',
-    '#title'         => t('Base field (context)'),
+    '#title'         => t('Base field (context]'),
     '#description'   => t('This field\'s value will be passed to the AI as context.'),
     '#options'       => $base_options,
     '#default_value' => $config['base_field'] ?? '',
@@ -223,7 +226,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#access'        => $requires_prompt,
   ];
 
-  if (openai_field_automator_tokens_available()) {
+  if (ai_field_automator_tokens_available()) {
     $token_type = ($entity_type === 'taxonomy_term') ? 'term' : $entity_type;
     $form['ai_automator']['settings_wrapper']['automator_token_help'] = [
       '#type' => 'fieldset',
@@ -299,7 +302,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   }
   $form['ai_automator']['settings_wrapper']['automator_entityreference_auto_create'] = [
     '#type' => 'checkbox',
-    '#title' => t('Auto-create missing referenced entities (nodes only)'),
+    '#title' => t('Auto-create missing referenced entities (nodes only]'),
     '#default_value' => !empty($config['entityreference_auto_create']),
     '#states' => [
       'visible' => [
@@ -386,7 +389,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       }
       $form['ai_automator']['settings_wrapper']['automator_entityreference_generate_fields']['automator_entity_field_enable_' . $target_field_name] = [
         '#type' => 'checkbox',
-        '#title' => $target_instance['label'] . ' (' . $target_field_name . ')',
+        '#title' => $target_instance['label'] . ' (' . $target_field_name . ']',
         '#default_value' => !empty($config['entityreference_generate_fields'][$target_field_name]),
       ];
       $form['ai_automator']['settings_wrapper']['automator_entityreference_generate_fields']['automator_entity_field_generate_' . $target_field_name] = [
@@ -414,7 +417,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '1792x1024' => '1792x1024',
     ],
     '#default_value' => $config['image_size'] ?? '1024x1024',
-    '#states' => _openai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
+    '#states' => _ai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_image_quality'] = [
     '#type' => 'select',
@@ -424,7 +427,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       'hd' => t('HD'),
     ],
     '#default_value' => $config['image_quality'] ?? 'standard',
-    '#states' => _openai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
+    '#states' => _ai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_image_style'] = [
     '#type' => 'select',
@@ -434,7 +437,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       'vivid' => t('Vivid'),
     ],
     '#default_value' => $config['image_style'] ?? 'natural',
-    '#states' => _openai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
+    '#states' => _ai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_image_response_format'] = [
     '#type' => 'select',
@@ -444,7 +447,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       'url' => 'url',
     ],
     '#default_value' => $config['image_response_format'] ?? 'b64_json',
-    '#states' => _openai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
+    '#states' => _ai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_image_output_format'] = [
     '#type' => 'select',
@@ -456,14 +459,14 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       'webp' => 'webp',
     ],
     '#default_value' => $config['image_output_format'] ?? '',
-    '#states' => _openai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
+    '#states' => _ai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_image_filename_pattern'] = [
     '#type' => 'textfield',
     '#title' => t('Image filename'),
     '#default_value' => $config['image_filename_pattern'] ?? '',
     '#description' => t('Optional fixed filename, e.g. <code>hero-image.png</code>. Leave blank for generated names.'),
-    '#states' => _openai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
+    '#states' => _ai_field_automator_type_states(['text_to_image', 'media_image_generation', 'video_to_image']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_speech_task'] = [
@@ -474,34 +477,35 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       'translate' => t('Translate to English'),
     ],
     '#default_value' => $config['speech_task'] ?? 'transcribe',
-    '#states' => _openai_field_automator_type_states(['audio_to_text', 'video_to_text']),
+    '#states' => _ai_field_automator_type_states(['audio_to_text', 'video_to_text']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_speech_model'] = [
     '#type' => 'textfield',
     '#title' => t('Speech-to-text model'),
     '#description' => t('Fully-qualified speech model ID used for transcription in video-derived automators.'),
-    '#default_value' => $config['speech_model'] ?? 'openai/whisper-1',
-    '#states' => _openai_field_automator_type_states(['video_to_html', 'video_to_image']),
+    '#default_value' => $config['speech_model'] ?? (config_get('ai.settings', 'default_stt_model') ?: 'whisper-1'),
+    '#states' => _ai_field_automator_type_states(['video_to_html', 'video_to_image']),
   ];
+
+  $tts_voice_options = ai_field_automator_tts_voice_options($chosen_model);
+  $tts_voice_default = $form_state['values']['automator_tts_voice'] ?? ($config['tts_voice'] ?? 'alloy');
+  if (!isset($tts_voice_options[$tts_voice_default])) {
+    reset($tts_voice_options);
+    $tts_voice_default = key($tts_voice_options);
+  }
+  $tts_voice_description = t('Voice used for audio generation.');
+  if (!empty($chosen_model) && strpos($chosen_model, 'elevenlabs/') === 0) {
+    $tts_voice_description = t('Available ElevenLabs voices for the selected model. The saved value is the actual ElevenLabs voice ID.');
+  }
 
   $form['ai_automator']['settings_wrapper']['automator_tts_voice'] = [
     '#type' => 'select',
     '#title' => t('TTS voice'),
-    '#options' => [
-      'alloy' => 'alloy',
-      'ash' => 'ash',
-      'ballad' => 'ballad',
-      'coral' => 'coral',
-      'echo' => 'echo',
-      'fable' => 'fable',
-      'nova' => 'nova',
-      'onyx' => 'onyx',
-      'sage' => 'sage',
-      'shimmer' => 'shimmer',
-    ],
-    '#default_value' => $config['tts_voice'] ?? 'alloy',
-    '#states' => _openai_field_automator_type_states(['text_to_speech', 'media_audio_generation']),
+    '#options' => $tts_voice_options,
+    '#default_value' => $tts_voice_default,
+    '#description' => $tts_voice_description,
+    '#states' => _ai_field_automator_type_states(['text_to_speech', 'media_audio_generation']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_tts_response_format'] = [
     '#type' => 'select',
@@ -515,14 +519,14 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       'pcm' => 'pcm',
     ],
     '#default_value' => $config['tts_response_format'] ?? 'mp3',
-    '#states' => _openai_field_automator_type_states(['text_to_speech', 'media_audio_generation']),
+    '#states' => _ai_field_automator_type_states(['text_to_speech', 'media_audio_generation']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_tts_filename_pattern'] = [
     '#type' => 'textfield',
     '#title' => t('Audio filename'),
     '#default_value' => $config['tts_filename_pattern'] ?? '',
     '#description' => t('Optional fixed filename, e.g. <code>voiceover.mp3</code>. Leave blank for generated names.'),
-    '#states' => _openai_field_automator_type_states(['text_to_speech', 'media_audio_generation']),
+    '#states' => _ai_field_automator_type_states(['text_to_speech', 'media_audio_generation']),
   ];
 
   $moderation_trigger_default = !empty($config['moderation_trigger_states']) ? implode(', ', (array) $config['moderation_trigger_states']) : '';
@@ -544,7 +548,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       continue;
     }
     if (in_array($fi['type'], ['text', 'text_long', 'text_with_summary', 'string_long'], TRUE)) {
-      $explanation_field_options[$fname] = $finstance['label'] . ' (' . $fname . ')';
+      $explanation_field_options[$fname] = $finstance['label'] . ' (' . $fname . ']';
     }
   }
 
@@ -554,15 +558,15 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#description' => t('Optional schema or JSON example that the model should follow.'),
     '#default_value' => $config['json_schema'] ?? '',
     '#rows' => 4,
-    '#states' => _openai_field_automator_type_states(['json_field', 'json_native_field', 'json_native_binary_field']),
+    '#states' => _ai_field_automator_type_states(['json_field', 'json_native_field', 'json_native_binary_field']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_metatag_keys'] = [
     '#type' => 'textfield',
     '#title' => t('Metatag keys'),
-    '#description' => t('Comma-separated keys to generate (e.g. <code>title, description, og:title, og:description</code>).'),
+    '#description' => t('Comma-separated keys to generate (e.g. <code>title, description, og:title, og:description</code>].'),
     '#default_value' => !empty($config['metatag_keys']) ? implode(', ', (array) $config['metatag_keys']) : '',
-    '#states' => _openai_field_automator_type_states(['metatag']),
+    '#states' => _ai_field_automator_type_states(['metatag']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_moderation_trigger_states'] = [
@@ -570,7 +574,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title' => t('Trigger states'),
     '#description' => t('Comma-separated moderation states that are allowed to trigger this automator.'),
     '#default_value' => $moderation_trigger_default,
-    '#states' => _openai_field_automator_type_states(['moderation_state']),
+    '#states' => _ai_field_automator_type_states(['moderation_state']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_moderation_lookup_states'] = [
@@ -578,7 +582,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title' => t('Lookup states'),
     '#description' => t('Comma-separated list of valid output states the model is allowed to choose from.'),
     '#default_value' => $moderation_lookup_default,
-    '#states' => _openai_field_automator_type_states(['moderation_state']),
+    '#states' => _ai_field_automator_type_states(['moderation_state']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_moderation_use_simple_model'] = [
@@ -586,7 +590,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title' => t('Use simple moderation parse mode'),
     '#description' => t('Parses state from free text output instead of requiring strict JSON.'),
     '#default_value' => !empty($config['moderation_use_simple_model']),
-    '#states' => _openai_field_automator_type_states(['moderation_state']),
+    '#states' => _ai_field_automator_type_states(['moderation_state']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_moderation_store_explanation_field'] = [
@@ -594,7 +598,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title' => t('Store moderation explanation in'),
     '#options' => $explanation_field_options,
     '#default_value' => $config['moderation_store_explanation_field'] ?? '',
-    '#states' => _openai_field_automator_type_states(['moderation_state']),
+    '#states' => _ai_field_automator_type_states(['moderation_state']),
   ];
 
   $search_index_default = $form_state['values']['automator_search_index'] ?? ($config['search_index'] ?? '');
@@ -602,11 +606,11 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#type' => 'select',
     '#title' => t('Search index'),
     '#description' => t('Search API index used for semantic/vector lookup.'),
-    '#options' => ['' => t('-- Select index --')] + openai_field_automator_get_search_index_options(),
+    '#options' => ['' => t('-- Select index --')] + ai_field_automator_get_search_index_options(),
     '#default_value' => $search_index_default,
-    '#states' => _openai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
+    '#states' => _ai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
     '#ajax' => [
-      'callback' => 'openai_field_automator_type_ajax',
+      'callback' => 'ai_field_automator_type_ajax',
       'wrapper' => 'automator-settings-wrapper',
     ],
   ];
@@ -614,9 +618,9 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#type' => 'select',
     '#title' => t('Output field'),
     '#description' => t('Field from the selected search index to store in this destination field.'),
-    '#options' => openai_field_automator_get_search_index_field_options($search_index_default),
+    '#options' => ai_field_automator_get_search_index_field_options($search_index_default),
     '#default_value' => $config['search_output_field'] ?? 'content',
-    '#states' => _openai_field_automator_type_states(['vector_search_text']),
+    '#states' => _ai_field_automator_type_states(['vector_search_text']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_search_max_results'] = [
     '#type' => 'number',
@@ -625,7 +629,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#min' => 1,
     '#max' => 100,
     '#default_value' => (int) ($config['search_max_results'] ?? 10),
-    '#states' => _openai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
+    '#states' => _ai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_search_offset'] = [
     '#type' => 'number',
@@ -633,30 +637,30 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#description' => t('Number of top matches to skip before collecting values.'),
     '#min' => 0,
     '#default_value' => (int) ($config['search_offset'] ?? 0),
-    '#states' => _openai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
+    '#states' => _ai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_search_minimum_score'] = [
     '#type' => 'textfield',
     '#title' => t('Minimum score'),
-    '#description' => t('Optional threshold for accepted matches (0-1). Leave 0 for no threshold.'),
+    '#description' => t('Optional threshold for accepted matches (0-1]. Leave 0 for no threshold.'),
     '#default_value' => (string) ($config['search_minimum_score'] ?? '0'),
-    '#states' => _openai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
+    '#states' => _ai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_search_distinct'] = [
     '#type' => 'checkbox',
     '#title' => t('Distinct results'),
     '#description' => t('Avoid duplicate outputs/targets from repeated search matches.'),
     '#default_value' => !array_key_exists('search_distinct', $config) || !empty($config['search_distinct']),
-    '#states' => _openai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
+    '#states' => _ai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
   ];
 
   $form['ai_automator']['settings_wrapper']['automator_views_view'] = [
     '#type' => 'select',
     '#title' => t('View display'),
-    '#description' => t('Choose a View and display to execute (format: view_name:display_id).'),
-    '#options' => ['' => t('-- Select view display --')] + openai_field_automator_get_view_display_options(),
+    '#description' => t('Choose a View and display to execute (format: view_name:display_id].'),
+    '#options' => ['' => t('-- Select view display --')] + ai_field_automator_get_view_display_options(),
     '#default_value' => $config['views_view'] ?? '',
-    '#states' => _openai_field_automator_type_states(['views_extract_text']),
+    '#states' => _ai_field_automator_type_states(['views_extract_text']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_views_arguments'] = [
     '#type' => 'textarea',
@@ -664,7 +668,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#description' => t('One argument value per line, in display argument order. Token replacements are supported.'),
     '#rows' => 4,
     '#default_value' => $views_arguments_default,
-    '#states' => _openai_field_automator_type_states(['views_extract_text']),
+    '#states' => _ai_field_automator_type_states(['views_extract_text']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_views_exposed_filters'] = [
     '#type' => 'textarea',
@@ -672,13 +676,38 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#description' => t('One filter per line in the format <code>identifier=value</code>. Token replacements are supported.'),
     '#rows' => 4,
     '#default_value' => $views_exposed_default,
-    '#states' => _openai_field_automator_type_states(['views_extract_text']),
+    '#states' => _ai_field_automator_type_states(['views_extract_text']),
   ];
   $form['ai_automator']['settings_wrapper']['automator_views_html_to_markdown'] = [
     '#type' => 'checkbox',
     '#title' => t('Convert rendered HTML to plain text'),
     '#default_value' => !empty($config['views_html_to_markdown']),
-    '#states' => _openai_field_automator_type_states(['views_extract_text']),
+    '#states' => _ai_field_automator_type_states(['views_extract_text']),
+  ];
+
+  // Agent plugin fields.
+  $agent_options = ['' => t('-- Select agent --')];
+  if (module_exists('ai_agent')) {
+    $agents = config_get('ai_agent.settings', 'agents') ?: [];
+    foreach ($agents as $aid => $agent) {
+      $agent_options[$aid] = $agent['label'] ?? $aid;
+    }
+  }
+  $form['ai_automator']['settings_wrapper']['automator_agent_id'] = [
+    '#type'          => 'select',
+    '#title'         => t('Agent'),
+    '#description'   => t('Select the configured AI agent to run for this field.'),
+    '#options'       => $agent_options,
+    '#default_value' => $config['agent_id'] ?? '',
+    '#states'        => _ai_field_automator_type_states(['agent_field']),
+  ];
+  $form['ai_automator']['settings_wrapper']['automator_agent_task'] = [
+    '#type'          => 'textarea',
+    '#title'         => t('Task instruction'),
+    '#description'   => t('Optional task instruction sent to the agent. Leave blank to use the agent\'s system prompt alone.'),
+    '#rows'          => 3,
+    '#default_value' => $config['agent_task'] ?? '',
+    '#states'        => _ai_field_automator_type_states(['agent_field']),
   ];
 
   // Provider Configuration — model selector and all generation parameters.
@@ -690,9 +719,14 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#collapsed'   => FALSE,
     ];
 
-    $chosen_model = $config['model'] ?? '';
-
-    $model_options = openai_field_automator_model_options($chosen_type);
+    $model_options = ai_field_automator_model_options($chosen_type);
+    if (!empty($chosen_model) && !ai_field_automator_model_option_exists($model_options, $chosen_model)) {
+      $model_options = [
+        t('Current model') => [
+          $chosen_model => $chosen_model,
+        ],
+      ] + $model_options;
+    }
     if ($model_options) {
       $form['ai_automator']['settings_wrapper']['provider_config']['automator_model'] = [
         '#type'          => 'select',
@@ -701,6 +735,10 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
         '#empty_option'  => t('-- Select a model --'),
         '#default_value' => $chosen_model,
         '#description'   => t('Models are grouped by provider.'),
+        '#ajax'          => [
+          'callback' => 'ai_field_automator_type_ajax',
+          'wrapper'  => 'automator-settings-wrapper',
+        ],
       ];
     }
     else {
@@ -708,7 +746,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
         '#type'          => 'textfield',
         '#title'         => t('Model'),
         '#default_value' => $chosen_model,
-        '#description'   => t('Enter the fully-qualified model ID (e.g. <code>openai/gpt-4o</code>, <code>ollama/llama3.2</code>).'),
+        '#description'   => t('Enter the fully-qualified model ID (e.g. <code>provider/model</code>, <code>ollama/llama3.2</code>, <code>anthropic/claude-3-5-sonnet</code>].'),
       ];
     }
 
@@ -717,7 +755,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#title'         => t('Temperature'),
       '#default_value' => $config['temperature'] ?? 0.7,
       '#size'          => 6,
-      '#description'   => t('Sampling temperature 0–2.0. Higher values mean more random output. Not used by reasoning models (forced to 1).'),
+      '#description'   => t('Sampling temperature 0–2.0. Higher values mean more random output. Not used by reasoning models (forced to 1].'),
     ];
 
     $form['ai_automator']['settings_wrapper']['provider_config']['automator_frequency_penalty'] = [
@@ -741,7 +779,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#title'         => t('Top P'),
       '#default_value' => $config['top_p'] ?? 1,
       '#size'          => 6,
-      '#description'   => t('Nucleus sampling (0–1). Alternative to temperature.'),
+      '#description'   => t('Nucleus sampling (0–1]. Alternative to temperature.'),
     ];
 
     $form['ai_automator']['settings_wrapper']['provider_config']['automator_max_tokens'] = [
@@ -757,13 +795,13 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#type'          => 'select',
       '#title'         => t('Reasoning Effort'),
       '#options'       => [
-        ''       => t('-- Default (medium) --'),
+        ''       => t('-- Default (medium] --'),
         'low'    => t('Low — faster, less thorough'),
         'medium' => t('Medium'),
         'high'   => t('High — slower, more thorough'),
       ],
       '#default_value' => $config['reasoning_effort'] ?? '',
-      '#description'   => t('Only used by reasoning models (o1, o3, o4-mini, etc.). Ignored for standard models.'),
+      '#description'   => t('Only used by reasoning models (o1, o3, o4-mini, etc.]. Ignored for standard models.'),
     ];
 
     // Image field selector — for vision-capable models.
@@ -774,7 +812,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
         continue;
       }
       if (in_array($fi['type'], ['image', 'file', 'media'], TRUE)) {
-        $image_field_options[$fname] = $finstance['label'] . ' (' . $fname . ')';
+        $image_field_options[$fname] = $finstance['label'] . ' (' . $fname . ']';
       }
     }
     if (count($image_field_options) > 1) {
@@ -799,7 +837,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#type'          => 'select',
     '#title'         => t('Edit mode'),
     '#options'       => [
-      'skip'    => t('Skip — never overwrite an existing value (default)'),
+      'skip'    => t('Skip — never overwrite an existing value (default]'),
       'changed' => t('Edit when changed — regenerate only when the source field changes'),
       'always'  => t('Always overwrite — regenerate on every save'),
     ],
@@ -812,7 +850,7 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title' => t('Automator Worker'),
     '#options' => [
       'widget_action' => t('Widget action - Adds a "Generate with AI" button on the field widget and runs on demand without saving.'),
-      'batch' => t('Batch - Uses JavaScript batch queue (not recommended), will not work on programmatical saving.'),
+      'batch' => t('Batch - Uses JavaScript batch queue (not recommended], will not work on programmatical saving.'),
       'queue_cron' => t('Queue/Cron - Saves as a queue worker and runs on cron.'),
       'direct' => t('Direct - Processes and saves the value directly.'),
     ],
@@ -834,17 +872,17 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#description'   => t('If the AI returns multiple values, join them into a single value using this separator. Leave empty to keep multiple values.'),
     '#options'       => [
       ''          => t("-- Don't join --"),
-      ', '        => t('Comma + space (, )'),
+      ', '        => t('Comma + space (, ]'),
       ' '         => t('Space'),
-      '. '        => t('Period + space (. )'),
+      '. '        => t('Period + space (. ]'),
       '\n'        => t('New line'),
       '\t'        => t('Tab'),
-      '<br />'    => t('HTML line break (<br />)'),
+      '<br />'    => t('HTML line break (<br />]'),
       '<br /><br />' => t('HTML double break'),
-      '<hr />'    => t('HTML horizontal rule (<hr />)'),
-      ','         => t('Comma (,)'),
-      ';'         => t('Semicolon (;)'),
-      '.'         => t('Period (.)'),
+      '<hr />'    => t('HTML horizontal rule (<hr />]'),
+      ','         => t('Comma (,]'),
+      ';'         => t('Semicolon (;]'),
+      '.'         => t('Period (.]'),
       'other'     => t('Custom…'),
     ],
     '#default_value' => $config['joiner'] ?? '',
@@ -876,28 +914,28 @@ function _openai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   ];
 
   // Attach our save handler (runs after field_ui saves the instance).
-  $form['#validate'][] = 'openai_field_automator_field_edit_form_validate';
-  $form['#submit'][] = 'openai_field_automator_field_edit_form_submit';
+  $form['#validate'][] = 'ai_field_automator_field_edit_form_validate';
+  $form['#submit'][] = 'ai_field_automator_field_edit_form_submit';
 }
 
 /**
  * AJAX callback: rebuild the settings wrapper when automator type changes.
  */
-function openai_field_automator_type_ajax($form, &$form_state) {
+function ai_field_automator_type_ajax($form, &$form_state) {
   return $form['ai_automator']['settings_wrapper'];
 }
 
 /**
  * AJAX callback: rebuilds the AI Automator section when enable is toggled.
  */
-function openai_field_automator_enabled_ajax($form, &$form_state) {
+function ai_field_automator_enabled_ajax($form, &$form_state) {
   return $form['ai_automator'];
 }
 
 /**
  * Validate handler for field edit form.
  */
-function _openai_field_automator_field_edit_form_validate($form, &$form_state) {
+function _ai_field_automator_field_edit_form_validate($form, &$form_state) {
   $values = $form_state['values'];
 
   if (empty($values['automator_enabled'])) {
@@ -909,7 +947,7 @@ function _openai_field_automator_field_edit_form_validate($form, &$form_state) {
   }
 
   $type = $values['automator_type'] ?? '';
-  $types = openai_field_automator_get_types();
+  $types = ai_field_automator_get_types();
   $type_definition = $types[$type] ?? [];
   $requires_model = !array_key_exists('requires_model', $type_definition) || !empty($type_definition['requires_model']);
   $requires_prompt = !array_key_exists('requires_prompt', $type_definition) || !empty($type_definition['requires_prompt']);
@@ -932,7 +970,7 @@ function _openai_field_automator_field_edit_form_validate($form, &$form_state) {
     }
   }
   elseif ($mode === 'token' && $requires_prompt) {
-    if (!openai_field_automator_tokens_available()) {
+    if (!ai_field_automator_tokens_available()) {
       form_set_error('automator_mode', t('Token mode requires Backdrop token support to be available.'));
     }
     if (trim((string) ($values['automator_token'] ?? '')) === '') {
@@ -994,14 +1032,14 @@ function _openai_field_automator_field_edit_form_validate($form, &$form_state) {
 /**
  * Submit handler: saves or deletes the per-field automator config.
  */
-function _openai_field_automator_field_edit_form_submit($form, &$form_state) {
+function _ai_field_automator_field_edit_form_submit($form, &$form_state) {
   $instance    = $form['#instance'];
   $entity_type = $instance['entity_type'];
   $bundle      = $instance['bundle'];
   $field_name  = $instance['field_name'];
   $values      = $form_state['values'];
 
-  $config_key = 'openai_field_automator.' . $entity_type . '.' . $bundle . '.' . $field_name;
+  $config_key = 'ai_field_automator.' . $entity_type . '.' . $bundle . '.' . $field_name;
 
   if (!empty($values['automator_enabled'])) {
     $data = [
@@ -1044,14 +1082,14 @@ function _openai_field_automator_field_edit_form_submit($form, &$form_state) {
       'image_output_format' => $values['automator_image_output_format'] ?? '',
       'image_filename_pattern' => trim((string) ($values['automator_image_filename_pattern'] ?? '')),
       'speech_task' => $values['automator_speech_task'] ?? 'transcribe',
-      'speech_model' => trim((string) ($values['automator_speech_model'] ?? 'openai/whisper-1')),
+      'speech_model' => trim((string) ($values['automator_speech_model'] ?? (config_get('ai.settings', 'default_stt_model') ?: 'whisper-1'))),
       'tts_voice' => $values['automator_tts_voice'] ?? 'alloy',
       'tts_response_format' => $values['automator_tts_response_format'] ?? 'mp3',
       'tts_filename_pattern' => trim((string) ($values['automator_tts_filename_pattern'] ?? '')),
       'json_schema' => trim((string) ($values['automator_json_schema'] ?? '')),
-      'metatag_keys' => openai_field_automator_parse_csv_list($values['automator_metatag_keys'] ?? ''),
-      'moderation_trigger_states' => openai_field_automator_parse_csv_list($values['automator_moderation_trigger_states'] ?? ''),
-      'moderation_lookup_states' => openai_field_automator_parse_csv_list($values['automator_moderation_lookup_states'] ?? ''),
+      'metatag_keys' => ai_field_automator_parse_csv_list($values['automator_metatag_keys'] ?? ''),
+      'moderation_trigger_states' => ai_field_automator_parse_csv_list($values['automator_moderation_trigger_states'] ?? ''),
+      'moderation_lookup_states' => ai_field_automator_parse_csv_list($values['automator_moderation_lookup_states'] ?? ''),
       'moderation_use_simple_model' => !empty($values['automator_moderation_use_simple_model']),
       'moderation_store_explanation_field' => trim((string) ($values['automator_moderation_store_explanation_field'] ?? '')),
       'search_index' => trim((string) ($values['automator_search_index'] ?? '')),
@@ -1061,9 +1099,11 @@ function _openai_field_automator_field_edit_form_submit($form, &$form_state) {
       'search_minimum_score' => (float) ($values['automator_search_minimum_score'] ?? 0),
       'search_distinct' => !empty($values['automator_search_distinct']),
       'views_view' => trim((string) ($values['automator_views_view'] ?? '')),
-      'views_arguments' => openai_field_automator_parse_line_list($values['automator_views_arguments'] ?? ''),
-      'views_exposed_filters' => openai_field_automator_parse_key_value_lines($values['automator_views_exposed_filters'] ?? ''),
+      'views_arguments' => ai_field_automator_parse_line_list($values['automator_views_arguments'] ?? ''),
+      'views_exposed_filters' => ai_field_automator_parse_key_value_lines($values['automator_views_exposed_filters'] ?? ''),
       'views_html_to_markdown' => !empty($values['automator_views_html_to_markdown']),
+      'agent_id'   => trim((string) ($values['automator_agent_id'] ?? '')),
+      'agent_task' => trim((string) ($values['automator_agent_task'] ?? '')),
     ];
     foreach ($values as $key => $value) {
       if (strpos($key, 'automator_entity_field_enable_') === 0 && !empty($value)) {
@@ -1087,7 +1127,7 @@ function _openai_field_automator_field_edit_form_submit($form, &$form_state) {
   }
 
   // Clear the per-bundle static cache.
-  backdrop_static_reset('openai_field_automator_load_field_config');
+  backdrop_static_reset('ai_field_automator_load_field_config');
 }
 
 /**
@@ -1099,7 +1139,7 @@ function _openai_field_automator_field_edit_form_submit($form, &$form_state) {
  * @return array
  *   Unique, trimmed list.
  */
-function openai_field_automator_parse_csv_list($value) {
+function ai_field_automator_parse_csv_list($value) {
   if (is_array($value)) {
     $parts = $value;
   }
@@ -1114,7 +1154,7 @@ function openai_field_automator_parse_csv_list($value) {
 /**
  * Returns enabled Search API index options keyed by machine name.
  */
-function openai_field_automator_get_search_index_options() {
+function ai_field_automator_get_search_index_options() {
   if (!module_exists('search_api') || !function_exists('search_api_index_load_multiple')) {
     return [];
   }
@@ -1123,7 +1163,7 @@ function openai_field_automator_get_search_index_options() {
   $indexes = search_api_index_load_multiple(FALSE, ['enabled' => 1]);
   foreach ($indexes as $index) {
     $label = !empty($index->name) ? $index->name : $index->machine_name;
-    $options[$index->machine_name] = $label . ' (' . $index->machine_name . ')';
+    $options[$index->machine_name] = $label . ' (' . $index->machine_name . ']';
   }
 
   return $options;
@@ -1132,7 +1172,7 @@ function openai_field_automator_get_search_index_options() {
 /**
  * Returns index field options for a selected Search API index.
  */
-function openai_field_automator_get_search_index_field_options($index_id) {
+function ai_field_automator_get_search_index_field_options($index_id) {
   $options = ['content' => t('Content')];
 
   if (!module_exists('search_api') || !function_exists('search_api_index_load') || empty($index_id)) {
@@ -1157,7 +1197,7 @@ function openai_field_automator_get_search_index_field_options($index_id) {
 /**
  * Returns enabled view display options keyed by "view:display".
  */
-function openai_field_automator_get_view_display_options() {
+function ai_field_automator_get_view_display_options() {
   if (!module_exists('views') || !function_exists('views_get_views_as_options')) {
     return [];
   }
@@ -1167,7 +1207,7 @@ function openai_field_automator_get_view_display_options() {
 /**
  * Parses a textarea into an ordered list (one non-empty line per item).
  */
-function openai_field_automator_parse_line_list($value) {
+function ai_field_automator_parse_line_list($value) {
   if (is_array($value)) {
     $parts = $value;
   }
@@ -1182,8 +1222,8 @@ function openai_field_automator_parse_line_list($value) {
 /**
  * Parses "key=value" lines into an associative array.
  */
-function openai_field_automator_parse_key_value_lines($value) {
-  $lines = openai_field_automator_parse_line_list($value);
+function ai_field_automator_parse_key_value_lines($value) {
+  $lines = ai_field_automator_parse_line_list($value);
   $out = [];
   foreach ($lines as $line) {
     $parts = explode('=', $line, 2);
@@ -1209,10 +1249,71 @@ function openai_field_automator_parse_key_value_lines($value) {
  * @return array
  *   A #states array ready to drop onto a form element.
  */
-function _openai_field_automator_type_states(array $types) {
+function _ai_field_automator_type_states(array $types) {
   $conditions = [];
   foreach ($types as $type) {
     $conditions[] = ['select[name="automator_type"]' => ['value' => $type]];
   }
   return ['visible' => $conditions];
+}
+
+/**
+ * Return provider-aware TTS voice options for the selected model.
+ *
+ * @param string $model
+ *   Fully-qualified model ID.
+ *
+ * @return array
+ *   Voice value => label options.
+ */
+function ai_field_automator_tts_voice_options($model = '') {
+  $default_options = [
+    'alloy' => 'alloy',
+    'ash' => 'ash',
+    'ballad' => 'ballad',
+    'coral' => 'coral',
+    'echo' => 'echo',
+    'fable' => 'fable',
+    'nova' => 'nova',
+    'onyx' => 'onyx',
+    'sage' => 'sage',
+    'shimmer' => 'shimmer',
+  ];
+
+  if (empty($model) || strpos($model, 'elevenlabs/') !== 0) {
+    return $default_options;
+  }
+
+  $stripped_model = '';
+  $api = ai_get_api_for_model($model, $stripped_model);
+  if (!$api || !method_exists($api, 'getVoices')) {
+    return $default_options;
+  }
+
+  try {
+    $voices = $api->getVoices($stripped_model);
+    if (!empty($voices) && is_array($voices)) {
+      return $voices;
+    }
+  }
+  catch (\Exception $e) {
+    watchdog('ai_field_automator', 'Could not load TTS voices for @model: @msg', [
+      '@model' => $model,
+      '@msg' => $e->getMessage(),
+    ], WATCHDOG_WARNING);
+  }
+
+  return $default_options;
+}
+
+/**
+ * Checks whether a grouped model options array contains a given model ID.
+ */
+function ai_field_automator_model_option_exists(array $model_options, $model_id) {
+  foreach ($model_options as $group) {
+    if (is_array($group) && array_key_exists($model_id, $group)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }

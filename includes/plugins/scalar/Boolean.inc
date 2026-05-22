@@ -1,17 +1,23 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for boolean fields.
  */
-
-class OpenAIFieldAutomatorBoolean extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorBoolean extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Generates a boolean yes/no value and stores 1 (true) or 0 (false).');
+    return t(
+      'Generates a boolean yes/no value and stores 1 (true] or 0 (false].'
+    );
   }
 
   /**
@@ -45,10 +51,10 @@ class OpenAIFieldAutomatorBoolean extends OpenAIFieldAutomatorBase {
 
       foreach ($rows as $row) {
         $raw = strtolower((string) ($row['value'] ?? ''));
-        if (preg_match('/\b(true|yes|y|1|enabled|on)\b/', $raw)) {
+        if (preg_match('/\b(true|yes|y|1|enabled|on]\b/', $raw)) {
           $values[] = 1;
         }
-        elseif (preg_match('/\b(false|no|n|0|disabled|off)\b/', $raw)) {
+        elseif (preg_match('/\b(false|no|n|0|disabled|off]\b/', $raw)) {
           $values[] = 0;
         }
       }

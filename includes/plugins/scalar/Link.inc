@@ -1,17 +1,21 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for link/url fields.
  */
-
-class OpenAIFieldAutomatorLink extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorLink extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Extracts URLs (and optional link text) from context.');
+    return t('Extracts URLs (and optional link text] from context.');
   }
 
   /**
@@ -65,13 +69,27 @@ class OpenAIFieldAutomatorLink extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
     $field_info = field_info_field($field_name);
     $columns = array_keys($field_info['columns'] ?? []);
-    $uri_key = in_array('uri', $columns, TRUE) ? 'uri' : (in_array('url', $columns, TRUE) ? 'url' : (in_array('value', $columns, TRUE) ? 'value' : ($columns[0] ?? 'value')));
+    $uri_key = in_array('uri', $columns, TRUE)
+      ? 'uri'
+      : (in_array(
+        'url',
+        $columns,
+        TRUE
+      )
+        ? 'url'
+        : (in_array('value', $columns, TRUE) ? 'value'
+          : ($columns[0] ?? 'value')));
     $title_key = in_array('title', $columns, TRUE) ? 'title' : NULL;
 
     $items = [];

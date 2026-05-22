@@ -1,0 +1,103 @@
+<?php
+
+/**
+ * @file
+ * Install / uninstall hooks for ai_field_automator.
+ */
+
+use ai_field_automator\includes\AIFieldAutomatorStatusField;
+
+/**
+ * Implements hook_install().
+ */
+function ai_field_automator_install() {
+  if (!module_load_install('ai_upgrade')) { return []; }
+  ai_upgrade_module_install('ai_field_automator');
+
+  backdrop_set_message(t('AI Field Automator installed. Configure it by editing a field on a content type, or view the <a href="!url">automator overview</a>.', [
+    '!url' => url('admin/config/ai/field-automator'),
+  ]));
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function ai_field_automator_requirements($phase) {
+  if (!module_load_install('ai_upgrade')) { return []; }
+  return ai_upgrade_module_requirements($phase, 'ai_field_automator');
+}
+
+/**
+ * Migrate legacy OpenAI automator config and disable the old module.
+ */
+function ai_field_automator_update_1000() {
+  $old_prefix = 'openai_field_automator.';
+  $new_prefix = 'ai_field_automator.';
+
+  foreach (config_get_names_with_prefix($old_prefix) as $config_name) {
+    $old = config($config_name);
+    $data = $old->get();
+    if (empty($data)) {
+      continue;
+    }
+
+    $new_name = $new_prefix . substr($config_name, strlen($old_prefix));
+    $new = config($new_name);
+    $new->setData($data);
+    $new->save();
+    $old->delete();
+  }
+
+  if (module_exists('openai_field_automator')) {
+    module_disable(['openai_field_automator']);
+  }
+
+  return t('Migrated OpenAI Field Automator configuration to AI Field Automator.');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function ai_field_automator_uninstall() {
+  // Delete all per-field automator config objects created by this module.
+  foreach (config_get_names_with_prefix('ai_field_automator.') as $config_name) {
+    config($config_name)->delete();
+  }
+
+  // Remove all ai_automator_status field instances and the base field.
+  $field = field_read_field('ai_automator_status');
+  if ($field) {
+    field_delete_field('ai_automator_status');
+  }
+}
+
+/**
+ * Create AI Automator Status field on bundles with existing automator configs.
+ */
+function ai_field_automator_update_1001() {
+  // Load the StatusField class.
+  backdrop_load('module', 'ai_field_automator');
+
+  $configs = config_get_names_with_prefix('ai_field_automator.');
+  $bundles_processed = array();
+
+  foreach ($configs as $config_name) {
+    $c = config_get($config_name);
+    if (empty($c) || empty($c['enabled'])) {
+      continue;
+    }
+    $key = $c['entity_type'] . '/' . $c['bundle'];
+    if (isset($bundles_processed[$key])) {
+      continue;
+    }
+    $bundles_processed[$key] = TRUE;
+    AIFieldAutomatorStatusField::modifyStatusField($c['entity_type'], $c['bundle']);
+  }
+
+  if (!empty($bundles_processed)) {
+    return t('Created AI Automator Status field on @count bundle(s).', array(
+      '@count' => count($bundles_processed),
+    ));
+  }
+  return t('No bundles with automator configs found.');
+}

@@ -1,5 +1,11 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use BackdropDateTime;
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for extracting dates from text into date fields.
@@ -8,14 +14,15 @@
  * datetime (MySQL DATETIME), and datestamp (Unix timestamp).
  * Supports optional end-date extraction when the field has todate enabled.
  */
-
-class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorDateExtract extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Extracts dates from text content (any format) and stores them in a date/datetime/datestamp field. Handles inconsistent date formats, relative dates, and optional end dates.');
+    return t(
+      'Extracts dates from text content (any format] and stores them in a date/datetime/datestamp field. Handles inconsistent date formats, relative dates, and optional end dates.'
+    );
   }
 
   /**
@@ -55,7 +62,12 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
       }
 
       foreach ($rows as $row) {
-        $item = $this->buildDateItem($row, $field_type, $has_end_date, $tz_handling);
+        $item = $this->buildDateItem(
+          $row,
+          $field_type,
+          $has_end_date,
+          $tz_handling
+        );
         if ($item !== NULL) {
           $values[] = $item;
         }
@@ -68,9 +80,15 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    *
-   * Override storeValues because date fields need structured arrays, not scalars.
+   * Override storeValues because date fields need structured arrays, not
+   * scalars.
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
@@ -81,12 +99,20 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
   /**
    * Builds the AI instruction suffix for date extraction.
    */
-  protected function buildDateExtractionSuffix($has_end_date, array $granularity) {
-    $suffix = "\n\nExtract dates from the text above. Return RFC8259 JSON only.";
+  protected function buildDateExtractionSuffix(
+    $has_end_date,
+    array $granularity
+  ) {
+    $suffix
+      = "\n\nExtract dates from the text above. Return RFC8259 JSON only.";
 
-    $has_time = in_array('hour', $granularity) || in_array('minute', $granularity);
+    $has_time = in_array('hour', $granularity)
+      || in_array(
+        'minute',
+        $granularity
+      );
     if ($has_time) {
-      $format_desc = 'YYYY-MM-DDTHH:MM:SS (ISO 8601)';
+      $format_desc = 'YYYY-MM-DDTHH:MM:SS (ISO 8601]';
       $example_val = '2025-03-15T14:30:00';
     }
     else {
@@ -95,7 +121,7 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
     }
 
     if ($has_end_date) {
-      $suffix .= " Each object must have \"value\" (start date) and \"value2\" (end date) as {$format_desc} strings.";
+      $suffix .= " Each object must have \"value\" (start date] and \"value2\" (end date] as {$format_desc} strings.";
       $suffix .= " If only one date is found, use it for both value and value2.";
       $suffix .= " Example: [{\"value\":\"{$example_val}\",\"value2\":\"{$example_val}\"}]";
     }
@@ -104,7 +130,7 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
       $suffix .= " Example: [{\"value\":\"{$example_val}\"}]";
     }
 
-    $suffix .= "\nParse any date format (American, European, relative, written-out, etc.) into the format shown.";
+    $suffix .= "\nParse any date format (American, European, relative, written-out, etc.] into the format shown.";
     $suffix .= " If the text contains no recognizable dates, return an empty array [].";
     $suffix .= " Do not include explanations. Return only the JSON array.";
 
@@ -126,7 +152,12 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
    * @return array|null
    *   A date field item array, or NULL if parsing fails.
    */
-  protected function buildDateItem(array $row, $field_type, $has_end_date, $tz_handling) {
+  protected function buildDateItem(
+    array $row,
+    $field_type,
+    $has_end_date,
+    $tz_handling
+  ) {
     $raw_value = trim((string) ($row['value'] ?? ''));
     if ($raw_value === '') {
       return NULL;
@@ -144,12 +175,16 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
     if ($has_end_date) {
       $raw_end = trim((string) ($row['value2'] ?? ''));
       $end_date = $raw_end !== '' ? $this->parseDate($raw_end) : clone $date;
-      $item['value2'] = $end_date ? $this->formatForStorage($end_date, $field_type) : $item['value'];
+      $item['value2'] = $end_date ? $this->formatForStorage(
+        $end_date,
+        $field_type
+      ) : $item['value'];
     }
 
     // Set timezone columns when tz_handling is 'date'.
     if ($tz_handling === 'date') {
-      $tz_name = !empty($row['timezone']) ? $row['timezone'] : date_default_timezone();
+      $tz_name = !empty($row['timezone']) ? $row['timezone']
+        : date_default_timezone();
       $item['timezone'] = $tz_name;
       $item['offset'] = $date->getOffset();
       if ($has_end_date && !empty($end_date)) {
@@ -189,7 +224,7 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
           return $date;
         }
       }
-      catch (Exception $e) {
+      catch (\Exception $e) {
         // Fall through to strtotime.
       }
     }
@@ -210,7 +245,7 @@ class OpenAIFieldAutomatorDateExtract extends OpenAIFieldAutomatorBase {
    *
    * @param \DateTime $date
    *   The parsed date.
-   * @param string $field_type
+   * @param string    $field_type
    *   One of 'date', 'datetime', 'datestamp'.
    *
    * @return string|int

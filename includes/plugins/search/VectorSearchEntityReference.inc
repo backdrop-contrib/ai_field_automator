@@ -1,17 +1,22 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\search;
+
 /**
  * @file
  * Search API vector/semantic search to entity reference plugin.
  */
-
-class OpenAIFieldAutomatorVectorSearchEntityReference extends OpenAIFieldAutomatorSearchBase {
+class AIFieldAutomatorVectorSearchEntityReference extends
+  AIFieldAutomatorSearchBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Uses Search API AI semantic search results to populate entity references.');
+    return t(
+      'Uses Search API AI semantic search results to populate entity references.'
+    );
   }
 
   /**
@@ -51,14 +56,20 @@ class OpenAIFieldAutomatorVectorSearchEntityReference extends OpenAIFieldAutomat
         if (!$this->passesMinimumScore($result, $config)) {
           continue;
         }
-        $target_id = $this->extractTargetId($item_id, $result, $target_type, $loaded_items);
+        $target_id = $this->extractTargetId(
+          $item_id,
+          $result,
+          $target_type,
+          $loaded_items
+        );
         if ($target_id) {
           $target_ids[] = $target_id;
         }
       }
     }
 
-    $distinct = !array_key_exists('search_distinct', $config) || !empty($config['search_distinct']);
+    $distinct = !array_key_exists('search_distinct', $config)
+      || !empty($config['search_distinct']);
     if ($distinct) {
       $target_ids = array_values(array_unique($target_ids));
     }
@@ -69,7 +80,12 @@ class OpenAIFieldAutomatorVectorSearchEntityReference extends OpenAIFieldAutomat
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
@@ -89,13 +105,20 @@ class OpenAIFieldAutomatorVectorSearchEntityReference extends OpenAIFieldAutomat
   /**
    * Extracts target entity ID from one search result.
    */
-  protected function extractTargetId($item_id, array $result, $target_type, array $loaded_items) {
+  protected function extractTargetId(
+    $item_id,
+    array $result,
+    $target_type,
+    array $loaded_items
+  ) {
     foreach ([$result['id'] ?? '', $item_id] as $candidate) {
       $parsed = $this->parseResultIdentifier($candidate);
       if (!$parsed['id']) {
         continue;
       }
-      if ($parsed['entity_type'] !== '' && $target_type && $parsed['entity_type'] !== $target_type) {
+      if ($parsed['entity_type'] !== '' && $target_type
+        && $parsed['entity_type'] !== $target_type
+      ) {
         continue;
       }
       return (int) $parsed['id'];

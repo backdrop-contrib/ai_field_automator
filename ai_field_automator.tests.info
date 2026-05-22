@@ -1,0 +1,11 @@
+[AIFieldAutomatorAgentPluginTestCase]
+name = AI Field Automator: Agent Plugin
+description = Verify AgentField plugin registration and generate() behavior.
+group = AI
+file = tests/ai_field_automator_agent.test
+
+[AIFieldAutomatorRegenerateToolTestCase]
+name = AI Field Automator: regenerate_field tool
+description = Verify regenerate_field tool registration and executor error handling.
+group = AI
+file = tests/ai_field_automator_agent.test

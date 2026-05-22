@@ -1,5 +1,10 @@
 <?php
 
+
+namespace ai_field_automator\includes;
+
+use FieldException;
+
 /**
  * @file
  * Manages the ai_automator_status field lifecycle on entity bundles.
@@ -12,8 +17,7 @@
  *   - failed     : One or more automators encountered an error.
  *   - finished   : All automators completed successfully.
  */
-
-class OpenAIFieldAutomatorStatusField {
+class AIFieldAutomatorStatusField {
 
   /**
    * The field machine name.
@@ -24,8 +28,11 @@ class OpenAIFieldAutomatorStatusField {
    * Status constants.
    */
   const STATUS_PENDING = 'pending';
+
   const STATUS_PROCESSING = 'processing';
+
   const STATUS_FAILED = 'failed';
+
   const STATUS_FINISHED = 'finished';
 
   /**
@@ -65,7 +72,11 @@ class OpenAIFieldAutomatorStatusField {
       return FALSE;
     }
     foreach (array_keys($instances) as $field_name) {
-      $config = openai_field_automator_load_field_config($entity_type, $bundle, $field_name);
+      $config = ai_field_automator_load_field_config(
+        $entity_type,
+        $bundle,
+        $field_name
+      );
       if (!empty($config['enabled'])) {
         return TRUE;
       }
@@ -88,69 +99,86 @@ class OpenAIFieldAutomatorStatusField {
     // Create the base field if it doesn't exist yet for this entity type.
     $field = field_read_field(self::FIELD_NAME);
     if (empty($field)) {
-      $field = array(
-        'field_name' => self::FIELD_NAME,
-        'type' => 'list_text',
-        'module' => 'list',
-        'settings' => array(
-          'allowed_values' => array(
-            self::STATUS_PENDING => 'Pending',
+      $field = [
+        'field_name'   => self::FIELD_NAME,
+        'type'         => 'list_text',
+        'module'       => 'list',
+        'settings'     => [
+          'allowed_values' => [
+            self::STATUS_PENDING    => 'Pending',
             self::STATUS_PROCESSING => 'Processing',
-            self::STATUS_FAILED => 'Failed',
-            self::STATUS_FINISHED => 'Finished',
-          ),
-        ),
-        'locked' => TRUE,
-        'cardinality' => 1,
+            self::STATUS_FAILED     => 'Failed',
+            self::STATUS_FINISHED   => 'Finished',
+          ],
+        ],
+        'locked'       => TRUE,
+        'cardinality'  => 1,
         'translatable' => FALSE,
-      );
+      ];
       try {
         field_create_field($field);
       }
       catch (FieldException $e) {
-        watchdog('openai_field_automator', 'Could not create status field storage: @msg', array(
-          '@msg' => $e->getMessage(),
-        ), WATCHDOG_ERROR);
+        watchdog(
+          'ai_field_automator',
+          'Could not create status field storage: @msg',
+          [
+            '@msg' => $e->getMessage(),
+          ],
+          WATCHDOG_ERROR
+        );
         return;
       }
     }
 
     // Create the instance on this bundle.
-    $instance = array(
-      'field_name' => self::FIELD_NAME,
-      'entity_type' => $entity_type,
-      'bundle' => $bundle,
-      'label' => t('AI Automator Status'),
-      'description' => t('Tracks the current status of AI automator processing on this entity.'),
-      'required' => FALSE,
-      'default_value' => array(
-        array('value' => self::STATUS_PENDING),
+    $instance = [
+      'field_name'    => self::FIELD_NAME,
+      'entity_type'   => $entity_type,
+      'bundle'        => $bundle,
+      'label'         => t('AI Automator Status'),
+      'description'   => t(
+        'Tracks the current status of AI automator processing on this entity.'
       ),
-      'widget' => array(
-        'type' => 'options_select',
+      'required'      => FALSE,
+      'default_value' => [
+        ['value' => self::STATUS_PENDING],
+      ],
+      'widget'        => [
+        'type'   => 'options_select',
         'weight' => 100,
-      ),
-      'display' => array(
-        'default' => array(
-          'label' => 'above',
-          'type' => 'list_default',
+      ],
+      'display'       => [
+        'default' => [
+          'label'  => 'above',
+          'type'   => 'list_default',
           'weight' => 100,
-        ),
-      ),
-    );
+        ],
+      ],
+    ];
     try {
       field_create_instance($instance);
-      watchdog('openai_field_automator', 'Created AI Automator Status field on %type/%bundle.', array(
-        '%type' => $entity_type,
-        '%bundle' => $bundle,
-      ), WATCHDOG_INFO);
+      watchdog(
+        'ai_field_automator',
+        'Created AI Automator Status field on %type/%bundle.',
+        [
+          '%type'   => $entity_type,
+          '%bundle' => $bundle,
+        ],
+        WATCHDOG_INFO
+      );
     }
     catch (FieldException $e) {
-      watchdog('openai_field_automator', 'Could not create status field instance on %type/%bundle: @msg', array(
-        '%type' => $entity_type,
-        '%bundle' => $bundle,
-        '@msg' => $e->getMessage(),
-      ), WATCHDOG_ERROR);
+      watchdog(
+        'ai_field_automator',
+        'Could not create status field instance on %type/%bundle: @msg',
+        [
+          '%type'   => $entity_type,
+          '%bundle' => $bundle,
+          '@msg'    => $e->getMessage(),
+        ],
+        WATCHDOG_ERROR
+      );
     }
   }
 
@@ -167,17 +195,27 @@ class OpenAIFieldAutomatorStatusField {
 
     try {
       field_delete_instance($instance, TRUE);
-      watchdog('openai_field_automator', 'Removed AI Automator Status field from %type/%bundle.', array(
-        '%type' => $entity_type,
-        '%bundle' => $bundle,
-      ), WATCHDOG_INFO);
+      watchdog(
+        'ai_field_automator',
+        'Removed AI Automator Status field from %type/%bundle.',
+        [
+          '%type'   => $entity_type,
+          '%bundle' => $bundle,
+        ],
+        WATCHDOG_INFO
+      );
     }
-    catch (Exception $e) {
-      watchdog('openai_field_automator', 'Could not remove status field from %type/%bundle: @msg', array(
-        '%type' => $entity_type,
-        '%bundle' => $bundle,
-        '@msg' => $e->getMessage(),
-      ), WATCHDOG_ERROR);
+    catch (\Exception $e) {
+      watchdog(
+        'ai_field_automator',
+        'Could not remove status field from %type/%bundle: @msg',
+        [
+          '%type'   => $entity_type,
+          '%bundle' => $bundle,
+          '@msg'    => $e->getMessage(),
+        ],
+        WATCHDOG_ERROR
+      );
     }
   }
 
@@ -192,7 +230,7 @@ class OpenAIFieldAutomatorStatusField {
    *   One of the STATUS_* constants.
    */
   public static function setStatus($entity_type, $entity, $status) {
-    list(, , $bundle) = entity_extract_ids($entity_type, $entity);
+    [, , $bundle] = entity_extract_ids($entity_type, $entity);
     if (!self::automatorFieldExists($entity_type, $bundle)) {
       return;
     }

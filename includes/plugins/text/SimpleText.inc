@@ -1,17 +1,23 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\text;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for simple text and string fields.
  */
-
-class OpenAIFieldAutomatorSimpleText extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorSimpleText extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Generates a short AI response and stores it in a plain text or string field.');
+    return t(
+      'Generates a short AI response and stores it in a plain text or string field.'
+    );
   }
 
   /**

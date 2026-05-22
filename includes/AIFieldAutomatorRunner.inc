@@ -1,14 +1,18 @@
 <?php
 
+
+namespace ai_field_automator\includes;
+
+use BackdropQueue;
+
 /**
  * @file
  * Loads and runs automator configurations against an entity on save.
  *
  * Configuration is stored per-field as a Backdrop config object:
- *   openai_field_automator.{entity_type}.{bundle}.{field_name}
+ *   ai_field_automator.{entity_type}.{bundle}.{field_name}
  */
-
-class OpenAIFieldAutomatorRunner {
+class AIFieldAutomatorRunner {
 
   /**
    * Process all configured automators for the fields of the given entity.
@@ -19,13 +23,18 @@ class OpenAIFieldAutomatorRunner {
    *   The entity being saved (modified in-place).
    */
   public function processEntity($entity_type, $entity, array $options = []) {
-    list(, , $bundle) = entity_extract_ids($entity_type, $entity);
+    [, , $bundle] = entity_extract_ids($entity_type, $entity);
     if (empty($bundle)) {
       return;
     }
 
-    // Respect openai_privacy opt-out settings before running any automators.
-    if (module_exists('openai_privacy') && !openai_privacy_entity_allowed($entity_type, $bundle)) {
+    // Respect ai_privacy opt-out settings before running any automators.
+    if (module_exists('ai_privacy')
+      && !ai_privacy_entity_allowed(
+        $entity_type,
+        $bundle
+      )
+    ) {
       return;
     }
 
@@ -42,10 +51,14 @@ class OpenAIFieldAutomatorRunner {
     // Collect enabled configs, keyed by weight so we can sort.
     $configs = [];
     foreach (array_keys($instances) as $field_name) {
-      if ($field_name === OpenAIFieldAutomatorStatusField::FIELD_NAME) {
+      if ($field_name === AIFieldAutomatorStatusField::FIELD_NAME) {
         continue;
       }
-      $config = openai_field_automator_load_field_config($entity_type, $bundle, $field_name);
+      $config = ai_field_automator_load_field_config(
+        $entity_type,
+        $bundle,
+        $field_name
+      );
       if (!empty($config['enabled'])) {
         $configs[$field_name] = $config;
       }
@@ -56,11 +69,11 @@ class OpenAIFieldAutomatorRunner {
     }
 
     // Sort by weight ascending so dependent fields run in the right order.
-    uasort($configs, function ($a, $b) {
+    uasort($configs, function($a, $b) {
       return ($a['weight'] ?? 0) - ($b['weight'] ?? 0);
     });
 
-    $types = openai_field_automator_get_types();
+    $types = ai_field_automator_get_types();
     $had_error = FALSE;
     $status_started = FALSE;
 
@@ -84,15 +97,24 @@ class OpenAIFieldAutomatorRunner {
       $mode = $config['mode'] ?? 'base';
 
       if (!isset($types[$type_id])) {
-        watchdog('openai_field_automator', 'Unknown automator type %type on field %field.', [
-          '%type'  => $type_id,
-          '%field' => $field_name,
-        ], WATCHDOG_WARNING);
+        watchdog(
+          'ai_field_automator',
+          'Unknown automator type %type on field %field.',
+          [
+            '%type' => $type_id,
+            '%field' => $field_name,
+          ],
+          WATCHDOG_WARNING
+        );
         continue;
       }
 
       $definition = $types[$type_id];
-      $requires_base_field = !array_key_exists('requires_base_field', $definition) || !empty($definition['requires_base_field']);
+      $requires_base_field = !array_key_exists(
+          'requires_base_field',
+          $definition
+        )
+        || !empty($definition['requires_base_field']);
 
       // In base mode we normally need context from the base field (or title pseudo-field).
       if ($mode === 'base' && $requires_base_field) {
@@ -100,17 +122,24 @@ class OpenAIFieldAutomatorRunner {
         if (empty($base_field)) {
           continue;
         }
-        if (!in_array($base_field, ['_title', '_rendered_entity'], TRUE) && !$this->fieldHasValue($entity, $base_field)) {
+        if (!in_array($base_field, ['_title', '_rendered_entity'], TRUE)
+          && !$this->fieldHasValue($entity, $base_field)
+        ) {
           continue;
         }
       }
 
-      $plugin = openai_field_automator_load_plugin($type_id, $types[$type_id]);
+      $plugin = ai_field_automator_load_plugin($type_id, $types[$type_id]);
       if (!$plugin) {
         continue;
       }
 
-      $normalized_value = $this->normalizeFieldValueForProcessing($plugin, $entity, $field_name, $config);
+      $normalized_value = $this->normalizeFieldValueForProcessing(
+        $plugin,
+        $entity,
+        $field_name,
+        $config
+      );
       $has_value = !$this->isValueEmptyAfterCheck($normalized_value);
 
       // Migrate legacy boolean edit_mode values from old configs.
@@ -147,14 +176,24 @@ class OpenAIFieldAutomatorRunner {
       }
 
       if (!$status_started) {
-        OpenAIFieldAutomatorStatusField::setStatus($entity_type, $entity, OpenAIFieldAutomatorStatusField::STATUS_PROCESSING);
+        AIFieldAutomatorStatusField::setStatus(
+          $entity_type,
+          $entity,
+          AIFieldAutomatorStatusField::STATUS_PROCESSING
+        );
         $status_started = TRUE;
       }
 
       try {
         $values = $plugin->generate($entity, $field_name, $config);
         if (!empty($values)) {
-          $values = $this->filterGeneratedValues($plugin, $entity, $field_name, $config, $values);
+          $values = $this->filterGeneratedValues(
+            $plugin,
+            $entity,
+            $field_name,
+            $config,
+            $values
+          );
         }
         if (!empty($values)) {
           // Apply joiner: collapse multiple values into one if configured.
@@ -170,12 +209,17 @@ class OpenAIFieldAutomatorRunner {
           $plugin->storeValues($entity, $values, $field_name, $config);
         }
       }
-      catch (Exception $e) {
+      catch (\Exception $e) {
         $had_error = TRUE;
-        watchdog('openai_field_automator', 'Error running automator on %field: @msg', [
-          '%field' => $field_name,
-          '@msg'   => $e->getMessage(),
-        ], WATCHDOG_ERROR);
+        watchdog(
+          'ai_field_automator',
+          'Error running automator on %field: @msg',
+          [
+            '%field' => $field_name,
+            '@msg'   => $e->getMessage(),
+          ],
+          WATCHDOG_ERROR
+        );
       }
     }
 
@@ -185,9 +229,13 @@ class OpenAIFieldAutomatorRunner {
 
     // Set final status.
     $final_status = $had_error
-      ? OpenAIFieldAutomatorStatusField::STATUS_FAILED
-      : OpenAIFieldAutomatorStatusField::STATUS_FINISHED;
-    OpenAIFieldAutomatorStatusField::setStatus($entity_type, $entity, $final_status);
+      ? AIFieldAutomatorStatusField::STATUS_FAILED
+      : AIFieldAutomatorStatusField::STATUS_FINISHED;
+    AIFieldAutomatorStatusField::setStatus(
+      $entity_type,
+      $entity,
+      $final_status
+    );
   }
 
   /**
@@ -217,8 +265,14 @@ class OpenAIFieldAutomatorRunner {
   /**
    * Normalizes the current field value using plugin-aware empty checks.
    */
-  protected function normalizeFieldValueForProcessing($plugin, $entity, $field_name, array $config) {
-    $value = isset($entity->{$field_name}[LANGUAGE_NONE]) ? $entity->{$field_name}[LANGUAGE_NONE] : array();
+  protected function normalizeFieldValueForProcessing(
+    $plugin,
+    $entity,
+    $field_name,
+    array $config
+  ) {
+    $value = isset($entity->{$field_name}[LANGUAGE_NONE])
+      ? $entity->{$field_name}[LANGUAGE_NONE] : [];
     if ($plugin && method_exists($plugin, 'checkIfEmpty')) {
       $value = $plugin->checkIfEmpty($value, $config);
     }
@@ -238,14 +292,14 @@ class OpenAIFieldAutomatorRunner {
       }
       foreach ($value as $item) {
         if (is_array($item)) {
-          foreach ($item as $candidate) {
-            if (is_scalar($candidate) && trim((string) $candidate) !== '') {
+          foreach ($item as $key => $candidate) {
+            if ($this->candidateCountsAsValue($key, $candidate)) {
               return FALSE;
             }
           }
           continue;
         }
-        if (is_scalar($item) && trim((string) $item) !== '') {
+        if ($this->candidateCountsAsValue(NULL, $item)) {
           return FALSE;
         }
       }
@@ -256,9 +310,43 @@ class OpenAIFieldAutomatorRunner {
   }
 
   /**
+   * Returns TRUE when a field item candidate should count as actual content.
+   *
+   * File widgets often submit placeholder values like `display = 1` and
+   * `fid = 0` for empty rows. Ignore those so media automators can run when the
+   * target field is still empty.
+   */
+  protected function candidateCountsAsValue($key, $candidate) {
+    if (!is_scalar($candidate)) {
+      return FALSE;
+    }
+
+    $candidate = trim((string) $candidate);
+    if ($candidate === '') {
+      return FALSE;
+    }
+
+    if ($key === 'fid' || $key === 'target_id') {
+      return ((int) $candidate) > 0;
+    }
+
+    if (in_array($key, ['display', 'description', 'alt', 'title'], TRUE)) {
+      return FALSE;
+    }
+
+    return TRUE;
+  }
+
+  /**
    * Removes generated values rejected by the plugin verifier.
    */
-  protected function filterGeneratedValues($plugin, $entity, $field_name, array $config, array $values) {
+  protected function filterGeneratedValues(
+    $plugin,
+    $entity,
+    $field_name,
+    array $config,
+    array $values
+  ) {
     if (!$plugin || !method_exists($plugin, 'verifyValue')) {
       return $values;
     }
@@ -276,7 +364,13 @@ class OpenAIFieldAutomatorRunner {
    * Returns TRUE when the selected base field changed from original entity.
    */
   protected function baseFieldChanged($entity, $base_field) {
-    if (empty($base_field) || in_array($base_field, ['_title', '_rendered_entity'], TRUE)) {
+    if (empty($base_field)
+      || in_array(
+        $base_field,
+        ['_title', '_rendered_entity'],
+        TRUE
+      )
+    ) {
       return TRUE;
     }
     if (!isset($entity->original)) {
@@ -291,7 +385,7 @@ class OpenAIFieldAutomatorRunner {
    * Enqueues queue/cron automator work for an entity.
    */
   public function enqueueEntity($entity_type, $entity) {
-    list($id, , $bundle) = entity_extract_ids($entity_type, $entity);
+    [$id, , $bundle] = entity_extract_ids($entity_type, $entity);
     if (empty($id) || empty($bundle)) {
       return;
     }
@@ -303,8 +397,14 @@ class OpenAIFieldAutomatorRunner {
 
     $has_queue_work = FALSE;
     foreach (array_keys($instances) as $field_name) {
-      $config = openai_field_automator_load_field_config($entity_type, $bundle, $field_name);
-      if (empty($config['enabled']) || (($config['worker_type'] ?? 'direct') !== 'queue_cron')) {
+      $config = ai_field_automator_load_field_config(
+        $entity_type,
+        $bundle,
+        $field_name
+      );
+      if (empty($config['enabled'])
+        || (($config['worker_type'] ?? 'direct') !== 'queue_cron')
+      ) {
         continue;
       }
       $has_queue_work = TRUE;
@@ -315,11 +415,11 @@ class OpenAIFieldAutomatorRunner {
       return;
     }
 
-    $queue = BackdropQueue::get('openai_field_automator_queue');
+    $queue = BackdropQueue::get('ai_field_automator_queue');
     $queue->createItem([
       'entity_type' => $entity_type,
-      'entity_id' => $id,
-      'bundle' => $bundle,
+      'entity_id'   => $id,
+      'bundle'      => $bundle,
     ]);
   }
 

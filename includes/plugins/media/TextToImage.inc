@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\media;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Generates images from prompt text and stores them into image/file fields.
  */
-class OpenAIFieldAutomatorTextToImage extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorTextToImage extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,7 @@ class OpenAIFieldAutomatorTextToImage extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('image', 'file');
+    return ['image', 'file'];
   }
 
   /**
@@ -25,37 +30,54 @@ class OpenAIFieldAutomatorTextToImage extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts[0])) {
-      return array();
+      return [];
     }
     $prompt = $prompts[0];
 
     $model = !empty($config['model']) ? $config['model'] : '';
     if ($model === '') {
-      return array();
+      return [];
     }
 
     $stripped_model = '';
-    $api = openai_get_api_for_model($model, $stripped_model);
+    $api = ai_get_api_for_model($model, $stripped_model);
     if (!$api) {
-      return array();
+      return [];
     }
 
     $size = !empty($config['image_size']) ? $config['image_size'] : '1024x1024';
-    $response_format = !empty($config['image_response_format']) ? $config['image_response_format'] : 'b64_json';
-    $quality = !empty($config['image_quality']) ? $config['image_quality'] : 'standard';
-    $style = !empty($config['image_style']) ? $config['image_style'] : 'natural';
-    $output_format = !empty($config['image_output_format']) ? $config['image_output_format'] : NULL;
+    $response_format = !empty($config['image_response_format'])
+      ? $config['image_response_format'] : 'b64_json';
+    $quality = !empty($config['image_quality']) ? $config['image_quality']
+      : 'standard';
+    $style = !empty($config['image_style']) ? $config['image_style']
+      : 'natural';
+    $output_format = !empty($config['image_output_format'])
+      ? $config['image_output_format'] : NULL;
 
-    $result = $api->images($stripped_model ?: $model, $prompt, $size, $response_format, $quality, $style, $output_format);
+    $result = $api->images(
+      $stripped_model ?: $model,
+      $prompt,
+      $size,
+      $response_format,
+      $quality,
+      $style,
+      $output_format
+    );
     if (empty($result['data'][0])) {
-      return array();
+      return [];
     }
 
     $item = $result['data'][0];
     if (!empty($item['b64_json'])) {
       $binary = base64_decode($item['b64_json']);
       if ($binary !== FALSE && $binary !== '') {
-        return array(array('binary' => $binary, 'ext' => !empty($output_format) ? $output_format : 'png'));
+        return [
+          [
+            'binary' => $binary,
+            'ext'    => !empty($output_format) ? $output_format : 'png',
+          ],
+        ];
       }
     }
 
@@ -74,17 +96,22 @@ class OpenAIFieldAutomatorTextToImage extends OpenAIFieldAutomatorBase {
         elseif ($mime === 'image/webp') {
           $ext = 'webp';
         }
-        return array(array('binary' => $binary, 'ext' => $ext));
+        return [['binary' => $binary, 'ext' => $ext]];
       }
     }
 
-    return array();
+    return [];
   }
 
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values[0]['binary'])) {
       return;
     }
@@ -96,29 +123,31 @@ class OpenAIFieldAutomatorTextToImage extends OpenAIFieldAutomatorBase {
 
     $langcode = LANGUAGE_NONE;
     $suffix = !empty($values[0]['ext']) ? $values[0]['ext'] : 'png';
-    $filename = !empty($config['image_filename_pattern']) ? $config['image_filename_pattern'] : ('ai-image-' . REQUEST_TIME . '.' . $suffix);
+    $filename = !empty($config['image_filename_pattern'])
+      ? $config['image_filename_pattern']
+      : ('ai-image-' . REQUEST_TIME . '.' . $suffix);
     $file = $this->createManagedFile($values[0]['binary'], $filename);
     if (!$file || empty($file->fid)) {
       return;
     }
 
     if ($field['type'] === 'image') {
-      $entity->{$field_name}[$langcode] = array(
-        array(
-          'fid' => $file->fid,
-          'alt' => '',
+      $entity->{$field_name}[$langcode] = [
+        [
+          'fid'   => $file->fid,
+          'alt'   => '',
           'title' => '',
-        ),
-      );
+        ],
+      ];
       return;
     }
 
-    $entity->{$field_name}[$langcode] = array(
-      array(
-        'fid' => $file->fid,
+    $entity->{$field_name}[$langcode] = [
+      [
+        'fid'     => $file->fid,
         'display' => 1,
-      ),
-    );
+      ],
+    ];
   }
 
 }

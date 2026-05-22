@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\domain;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Automator for address-style fields.
  */
-class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorAddress extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,7 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('address', 'addressfield');
+    return ['address', 'addressfield'];
   }
 
   /**
@@ -25,10 +30,10 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
-      return array();
+      return [];
     }
 
-    $values = array();
+    $values = [];
     foreach ($prompts as $prompt) {
       $prompt .= "\n\nReturn RFC8259 JSON only with this exact shape: ";
       $prompt .= "[{\"value\":{\"country_code\":\"2-letter ISO code\",\"administrative_area\":\"state/region\",\"locality\":\"city\",\"postal_code\":\"postal code\",\"address_line1\":\"street line 1\",\"address_line2\":\"street line 2\",\"organization\":\"organization\",\"given_name\":\"first name\",\"family_name\":\"last name\"}}]";
@@ -44,7 +49,7 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
         continue;
       }
       if ($this->isAssoc($rows)) {
-        $rows = array($rows);
+        $rows = [$rows];
       }
 
       foreach ($rows as $row) {
@@ -52,7 +57,10 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
         if (!is_array($candidate)) {
           continue;
         }
-        if (empty($candidate['country_code']) && empty($candidate['address_line1']) && empty($candidate['locality'])) {
+        if (empty($candidate['country_code'])
+          && empty($candidate['address_line1'])
+          && empty($candidate['locality'])
+        ) {
           continue;
         }
         $values[] = $candidate;
@@ -65,7 +73,12 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
@@ -75,12 +88,12 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
       return;
     }
 
-    $items = array();
+    $items = [];
     foreach ($values as $value) {
       if (!is_array($value)) {
         continue;
       }
-      $item = array();
+      $item = [];
       foreach (array_keys($field_info['columns']) as $column) {
         $mapped = $this->mapColumnValue($column, $value);
         if ($mapped !== '') {
@@ -105,7 +118,7 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
       return trim((string) $value[$column]);
     }
 
-    $map = array(
+    $map = [
       'country' => 'country_code',
       'thoroughfare' => 'address_line1',
       'premise' => 'address_line2',
@@ -113,14 +126,21 @@ class OpenAIFieldAutomatorAddress extends OpenAIFieldAutomatorBase {
       'name_line' => 'organization',
       'first_name' => 'given_name',
       'last_name' => 'family_name',
-    );
+    ];
 
-    if (isset($map[$column]) && isset($value[$map[$column]]) && is_scalar($value[$map[$column]])) {
+    if (isset($map[$column]) && isset($value[$map[$column]])
+      && is_scalar(
+        $value[$map[$column]]
+      )
+    ) {
       return trim((string) $value[$map[$column]]);
     }
 
     if ($column === 'name_line') {
-      $name = trim((string) (($value['given_name'] ?? '') . ' ' . ($value['family_name'] ?? '')));
+      $name = trim(
+        (string) (($value['given_name'] ?? '') . ' ' . ($value['family_name'] ??
+            ''))
+      );
       return $name;
     }
 

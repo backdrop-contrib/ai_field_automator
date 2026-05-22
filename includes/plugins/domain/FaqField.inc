@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\domain;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Automator for FAQ field types.
  */
-class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorFaqField extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,7 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('faqfield');
+    return ['faqfield'];
   }
 
   /**
@@ -25,10 +30,10 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
-      return array();
+      return [];
     }
 
-    $values = array();
+    $values = [];
     foreach ($prompts as $prompt) {
       $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"question\":\"FAQ question\",\"answer\":\"FAQ answer\"}}]";
       $text = $this->callAI($prompt, $config);
@@ -40,7 +45,7 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
         continue;
       }
       if ($this->isAssoc($rows)) {
-        $rows = array($rows);
+        $rows = [$rows];
       }
       foreach ($rows as $row) {
         $candidate = isset($row['value']) ? $row['value'] : $row;
@@ -52,10 +57,10 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
         if ($question === '' || $answer === '') {
           continue;
         }
-        $values[] = array(
+        $values[] = [
           'question' => $question,
-          'answer' => $answer,
-        );
+          'answer'   => $answer,
+        ];
       }
     }
 
@@ -65,7 +70,12 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
@@ -77,7 +87,7 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
     $columns = array_keys($field_info['columns']);
     $primary = $this->getPrimaryColumn($field_info);
 
-    $items = array();
+    $items = [];
     foreach ($values as $value) {
       $question = trim((string) ($value['question'] ?? ''));
       $answer = trim((string) ($value['answer'] ?? ''));
@@ -85,8 +95,14 @@ class OpenAIFieldAutomatorFaqField extends OpenAIFieldAutomatorBase {
         continue;
       }
 
-      $item = array();
-      if (in_array('question', $columns, TRUE) && in_array('answer', $columns, TRUE)) {
+      $item = [];
+      if (in_array('question', $columns, TRUE)
+        && in_array(
+          'answer',
+          $columns,
+          TRUE
+        )
+      ) {
         $item['question'] = $question;
         $item['answer'] = $answer;
       }

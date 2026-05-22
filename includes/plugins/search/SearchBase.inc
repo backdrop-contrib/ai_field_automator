@@ -1,17 +1,23 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\search;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Shared helpers for Search API-backed automator plugins.
  */
-
-abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
+abstract class AIFieldAutomatorSearchBase extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function ruleIsAllowed($entity, $field_name, array $config) {
-    if (!module_exists('search_api') || !function_exists('search_api_query') || !function_exists('search_api_index_load')) {
+    if (!module_exists('search_api') || !function_exists('search_api_query')
+      || !function_exists('search_api_index_load')
+    ) {
       return FALSE;
     }
     if (empty($config['search_index'])) {
@@ -26,7 +32,7 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
    *
    * @param string $query_text
    *   Prompt/context text.
-   * @param array $config
+   * @param array  $config
    *   Automator config.
    *
    * @return array
@@ -51,23 +57,29 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
       $query = search_api_query($index_id, [
         'parse mode' => 'single',
         // Search API AI backends (Milvus/Pinecone) read this option.
-        'top_k' => $offset + $limit,
+        'top_k'      => $offset + $limit,
       ]);
       $query->keys($query_text);
       $query->range($offset, $limit);
       $response = $query->execute();
-      $results = !empty($response['results']) && is_array($response['results']) ? $response['results'] : [];
+      $results = !empty($response['results']) && is_array($response['results'])
+        ? $response['results'] : [];
 
       return [
         'index' => $index,
         'results' => $results,
       ];
     }
-    catch (Exception $e) {
-      watchdog('openai_field_automator', 'Search query failed on index %index: @msg', [
-        '%index' => $index_id,
-        '@msg' => $e->getMessage(),
-      ], WATCHDOG_WARNING);
+    catch (\Exception $e) {
+      watchdog(
+        'ai_field_automator',
+        'Search query failed on index %index: @msg',
+        [
+          '%index' => $index_id,
+          '@msg'   => $e->getMessage(),
+        ],
+        WATCHDOG_WARNING
+      );
       return [];
     }
   }
@@ -120,7 +132,7 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
   protected function parseResultIdentifier($value) {
     $parsed = [
       'entity_type' => '',
-      'id' => 0,
+      'id'          => 0,
     ];
 
     $value = trim((string) $value);
@@ -131,7 +143,7 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
       $parsed['id'] = (int) $value;
       return $parsed;
     }
-    if (preg_match('/^([a-z_]+)\/(\d+)$/i', $value, $matches)) {
+    if (preg_match('/^([a-z_]+]\/(\d+]$/i', $value, $matches)) {
       $parsed['entity_type'] = $matches[1];
       $parsed['id'] = (int) $matches[2];
     }
@@ -148,12 +160,12 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
 
     if ($target_type && function_exists('entity_extract_ids')) {
       try {
-        list($id) = entity_extract_ids($target_type, $entity);
+        [$id] = entity_extract_ids($target_type, $entity);
         if (!empty($id)) {
           return (int) $id;
         }
       }
-      catch (Exception $e) {
+      catch (\Exception $e) {
         // Fall through to common Backdrop entity key checks.
       }
     }
@@ -161,13 +173,19 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
     if (isset($entity->nid) && (!$target_type || $target_type === 'node')) {
       return (int) $entity->nid;
     }
-    if (isset($entity->tid) && (!$target_type || $target_type === 'taxonomy_term')) {
+    if (isset($entity->tid)
+      && (!$target_type
+        || $target_type === 'taxonomy_term')
+    ) {
       return (int) $entity->tid;
     }
     if (isset($entity->uid) && (!$target_type || $target_type === 'user')) {
       return (int) $entity->uid;
     }
-    if (isset($entity->item_id) && (!$target_type || $target_type === 'paragraphs_item')) {
+    if (isset($entity->item_id)
+      && (!$target_type
+        || $target_type === 'paragraphs_item')
+    ) {
       return (int) $entity->item_id;
     }
 
@@ -175,4 +193,3 @@ abstract class OpenAIFieldAutomatorSearchBase extends OpenAIFieldAutomatorBase {
   }
 
 }
-

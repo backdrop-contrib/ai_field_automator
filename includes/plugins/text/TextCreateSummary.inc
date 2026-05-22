@@ -1,20 +1,28 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\text;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
- * Automator plugin that generates ONLY the summary for text_with_summary fields.
+ * Automator plugin that generates ONLY the summary for text_with_summary
+ * fields.
  *
  * Unlike the LongText plugin which generates the full body text, this plugin
- * assumes the main text already exists and uses AI to create a concise summary.
+ * assumes the main text already exists and uses AI to create a concise
+ * summary.
  */
-
-class OpenAIFieldAutomatorTextCreateSummary extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorTextCreateSummary extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Generates an AI summary for text_with_summary fields. The main text body is left untouched — only the summary column is written.');
+    return t(
+      'Generates an AI summary for text_with_summary fields. The main text body is left untouched — only the summary column is written.'
+    );
   }
 
   /**
@@ -46,10 +54,10 @@ class OpenAIFieldAutomatorTextCreateSummary extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function checkIfEmpty(array $value, array $config = array()) {
+  public function checkIfEmpty(array $value, array $config = []) {
     foreach ($value as $item) {
       if (empty($item['summary'])) {
-        return array();
+        return [];
       }
     }
     return $value;
@@ -68,7 +76,12 @@ class OpenAIFieldAutomatorTextCreateSummary extends OpenAIFieldAutomatorBase {
    * Only updates the 'summary' column of existing field items. The main 'value'
    * and 'format' columns are preserved.
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }

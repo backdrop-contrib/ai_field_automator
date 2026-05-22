@@ -1,17 +1,23 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\reference;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for entityreference fields.
  */
-
-class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorEntityReference extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Maps generated values to existing referenceable entities or generates new referenced entities with configured field prompts.');
+    return t(
+      'Maps generated values to existing referenceable entities or generates new referenced entities with configured field prompts.'
+    );
   }
 
   /**
@@ -25,7 +31,9 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function generate($entity, $field_name, array $config) {
-    if (($config['entityreference_mode'] ?? 'map_existing') === 'generate_new') {
+    if (($config['entityreference_mode'] ?? 'map_existing')
+      === 'generate_new'
+    ) {
       return $this->generateNewEntities($entity, $field_name, $config);
     }
     return $this->mapExistingEntities($entity, $field_name, $config);
@@ -45,12 +53,24 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
       return [];
     }
 
+    $use_tools = $this->shouldUseToolLookup($field_name, $options, $config);
     $option_labels = array_values($options);
     $values = [];
     foreach ($prompts as $prompt) {
-      $prompt .= "\n\nAvailable options:\n" . implode("\n", $option_labels);
-      $prompt .= "\n\nDo not include explanations. Return RFC8259 JSON only in this exact format: [{\"value\":\"existing option label or entity id\"}]";
-      $text = $this->callAI($prompt, $config);
+      if ($use_tools) {
+        $messages = [
+          [
+            'role' => 'user',
+            'content' => $prompt . "\n\nUse live node lookup tools when you need to resolve a candidate reference. Return RFC8259 JSON only in this exact format: [{\"value\":\"existing option label or entity id\"}]",
+          ],
+        ];
+        $text = $this->callAIWithTools($messages, ['search_nodes', 'get_node_info', 'get_nodes_by_type'], $config);
+      }
+      else {
+        $prompt .= "\n\nAvailable options:\n" . implode("\n", $option_labels);
+        $prompt .= "\n\nDo not include explanations. Return RFC8259 JSON only in this exact format: [{\"value\":\"existing option label or entity id\"}]";
+        $text = $this->callAI($prompt, $config);
+      }
       if ($text === '') {
         continue;
       }
@@ -66,7 +86,11 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
         }
         $id = $this->resolveToId($candidate, $options);
         if (!$id && !empty($config['entityreference_auto_create'])) {
-          $id = $this->autoCreateEntityByLabel($candidate, $field_name, $config);
+          $id = $this->autoCreateEntityByLabel(
+            $candidate,
+            $field_name,
+            $config
+          );
           if ($id) {
             $options[$id] = $candidate;
           }
@@ -78,6 +102,27 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
     }
 
     return array_values(array_unique($values));
+  }
+
+  /**
+   * Uses tools when the candidate set is large enough.
+   */
+  protected function shouldUseToolLookup($field_name, array $options, array $config) {
+    if (empty($options) || !module_exists('ai_tools')) {
+      return FALSE;
+    }
+
+    $field = field_info_field($field_name);
+    $target_type = $field['settings']['target_type'] ?? '';
+    if ($target_type !== 'node') {
+      return FALSE;
+    }
+
+    if (!empty($config['entityreference_use_tools'])) {
+      return TRUE;
+    }
+
+    return count($options) > 100;
   }
 
   /**
@@ -98,7 +143,8 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
 
     $rows_out = [];
     foreach ($prompts as $prompt) {
-      $prompt .= "\n\nDo not include explanations. Return RFC8259 JSON only in this exact format: [{\"value\":{" . $schema . "}}]";
+      $prompt .= "\n\nDo not include explanations. Return RFC8259 JSON only in this exact format: [{\"value\":{"
+        . $schema . "}}]";
       $text = $this->callAI($prompt, $config);
       if ($text === '') {
         continue;
@@ -118,12 +164,19 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
 
-    if (($config['entityreference_mode'] ?? 'map_existing') === 'generate_new') {
+    if (($config['entityreference_mode'] ?? 'map_existing')
+      === 'generate_new'
+    ) {
       $ids = $this->createGeneratedEntities($values, $field_name, $config);
       $items = [];
       foreach ($ids as $id) {
@@ -145,7 +198,11 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
   /**
    * Create generated target entities and return IDs.
    */
-  protected function createGeneratedEntities(array $rows, $field_name, array $config) {
+  protected function createGeneratedEntities(
+    array $rows,
+    $field_name,
+    array $config
+  ) {
     $field = field_info_field($field_name);
     $target_type = $field['settings']['target_type'] ?? '';
     if ($target_type !== 'node') {
@@ -154,7 +211,9 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
 
     $bundle = $config['entityreference_generate_bundle'] ?? '';
     if (!$bundle) {
-      $bundles = array_keys($field['settings']['handler_settings']['target_bundles'] ?? []);
+      $bundles = array_keys(
+        $field['settings']['handler_settings']['target_bundles'] ?? []
+      );
       $bundle = $bundles[0] ?? '';
     }
     if (!$bundle) {
@@ -171,17 +230,28 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
       $node->status = 1;
 
       $title = trim((string) ($row['title'] ?? ''));
-      $node->title = $title !== '' ? truncate_utf8($title, 255, TRUE, TRUE) : t('Generated reference');
+      $node->title = $title !== ''
+        ? truncate_utf8($title, 255, TRUE, TRUE)
+        : t(
+          'Generated reference'
+        );
 
       foreach ($row as $target_field => $value) {
-        if ($target_field === 'title' || !isset($target_instances[$target_field])) {
+        if ($target_field === 'title'
+          || !isset($target_instances[$target_field])
+        ) {
           continue;
         }
         $instance = $target_instances[$target_field];
         $field_info = field_info_field($target_field);
         $column = array_key_first($field_info['columns'] ?? ['value' => []]);
         $item = [$column => $value];
-        if (in_array($field_info['type'], ['text', 'text_long', 'text_with_summary'], TRUE)) {
+        if (in_array(
+          $field_info['type'],
+          ['text', 'text_long', 'text_with_summary'],
+          TRUE
+        )
+        ) {
           $item['format'] = $config['text_format'] ?? 'plain_text';
         }
         $node->{$target_field}[LANGUAGE_NONE][0] = $item;
@@ -205,12 +275,21 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
     }
 
     $field = field_info_field($field_name);
-    $instance = field_info_instance($config['entity_type'], $field_name, $config['bundle']);
+    $instance = field_info_instance(
+      $config['entity_type'],
+      $field_name,
+      $config['bundle']
+    );
     if (empty($field) || empty($instance)) {
       return [];
     }
 
-    $handler = entityreference_get_selection_handler($field, $instance, $config['entity_type'], NULL);
+    $handler = entityreference_get_selection_handler(
+      $field,
+      $instance,
+      $config['entity_type'],
+      NULL
+    );
     if (!$handler || !method_exists($handler, 'getReferencableEntities')) {
       return [];
     }
@@ -238,7 +317,12 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
       }
     }
     foreach ($options as $id => $label) {
-      if (mb_stripos($label, $candidate) !== FALSE || mb_stripos($candidate, $label) !== FALSE) {
+      if (mb_stripos($label, $candidate) !== FALSE
+        || mb_stripos(
+          $candidate,
+          $label
+        ) !== FALSE
+      ) {
         return (int) $id;
       }
     }
@@ -248,14 +332,20 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
   /**
    * Auto-creates a target entity for node references by label.
    */
-  protected function autoCreateEntityByLabel($label, $field_name, array $config) {
+  protected function autoCreateEntityByLabel(
+    $label,
+    $field_name,
+    array $config
+  ) {
     $field = field_info_field($field_name);
     $target_type = $field['settings']['target_type'] ?? '';
     if ($target_type !== 'node') {
       return 0;
     }
 
-    $bundles = array_keys($field['settings']['handler_settings']['target_bundles'] ?? []);
+    $bundles = array_keys(
+      $field['settings']['handler_settings']['target_bundles'] ?? []
+    );
     $bundle = $config['entityreference_create_bundle'] ?? ($bundles[0] ?? '');
     if (empty($bundle)) {
       return 0;
@@ -273,4 +363,3 @@ class OpenAIFieldAutomatorEntityReference extends OpenAIFieldAutomatorBase {
   }
 
 }
-

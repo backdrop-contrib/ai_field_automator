@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\media;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Generates image alt text for image field items.
  */
-class OpenAIFieldAutomatorImageAltText extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorImageAltText extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,32 +21,35 @@ class OpenAIFieldAutomatorImageAltText extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('image');
+    return ['image'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedInputs() {
-    return array('image', 'file');
+    return ['image', 'file'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function generate($entity, $field_name, array $config) {
-    $base_field = !empty($config['base_field']) ? $config['base_field'] : $field_name;
+    $base_field = !empty($config['base_field']) ? $config['base_field']
+      : $field_name;
     if (empty($entity->{$base_field})) {
-      return array();
+      return [];
     }
 
-    $prompt_template = trim((string) ($config['prompt'] ?? 'Write concise alt text for this image.'));
+    $prompt_template = trim(
+      (string) ($config['prompt'] ?? 'Write concise alt text for this image.')
+    );
     $model = !empty($config['model']) ? $config['model'] : '';
     if ($model === '') {
-      return array();
+      return [];
     }
 
-    $values = array();
+    $values = [];
     foreach ($entity->{$base_field} as $lang_items) {
       if (!is_array($lang_items)) {
         continue;
@@ -54,10 +62,10 @@ class OpenAIFieldAutomatorImageAltText extends OpenAIFieldAutomatorBase {
         if (!$file) {
           continue;
         }
-        $context = strtr($prompt_template, array(
+        $context = strtr($prompt_template, [
           '{filename}' => !empty($file->filename) ? $file->filename : '',
-        ));
-        $response = $this->callAI($context, $config);
+        ]);
+        $response = $this->callAI($context, $config, [$file]);
         if ($response !== '') {
           $values[] = trim($response);
         }
@@ -70,10 +78,10 @@ class OpenAIFieldAutomatorImageAltText extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function checkIfEmpty(array $value, array $config = array()) {
+  public function checkIfEmpty(array $value, array $config = []) {
     foreach ($value as $item) {
       if (empty($item['alt'])) {
-        return array();
+        return [];
       }
     }
     return $value;
@@ -82,13 +90,22 @@ class OpenAIFieldAutomatorImageAltText extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values) || empty($entity->{$field_name})) {
       return;
     }
 
     $langcode = LANGUAGE_NONE;
-    if (empty($entity->{$field_name}[$langcode]) || !is_array($entity->{$field_name}[$langcode])) {
+    if (empty($entity->{$field_name}[$langcode])
+      || !is_array(
+        $entity->{$field_name}[$langcode]
+      )
+    ) {
       return;
     }
 

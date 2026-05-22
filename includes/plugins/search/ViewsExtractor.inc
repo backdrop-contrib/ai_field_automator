@@ -1,17 +1,24 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\search;
+
+use AIContentExtractor;
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Views output extraction plugin.
  */
-
-class OpenAIFieldAutomatorViewsExtractor extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorViewsExtractor extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Executes a configured View display and stores the rendered output.');
+    return t(
+      'Executes a configured View display and stores the rendered output.'
+    );
   }
 
   /**
@@ -36,13 +43,19 @@ class OpenAIFieldAutomatorViewsExtractor extends OpenAIFieldAutomatorBase {
       return [];
     }
 
-    list($view_name, $display_id) = $this->parseViewReference($config['views_view'] ?? '');
+    [$view_name, $display_id] = $this->parseViewReference(
+      $config['views_view'] ?? ''
+    );
     if ($view_name === '') {
       return [];
     }
 
     $view = views_get_view($view_name);
-    if (!$view || !$view->set_display($display_id) || !$view->access([$display_id])) {
+    if (!$view || !$view->set_display($display_id)
+      || !$view->access(
+        [$display_id]
+      )
+    ) {
       return [];
     }
 
@@ -66,7 +79,7 @@ class OpenAIFieldAutomatorViewsExtractor extends OpenAIFieldAutomatorBase {
     }
 
     if (!empty($config['views_html_to_markdown'])) {
-      $output = $this->htmlToText($output);
+      $output = AIContentExtractor::htmlToMarkdown($output);
     }
 
     return $output !== '' ? [$output] : [];
@@ -102,7 +115,11 @@ class OpenAIFieldAutomatorViewsExtractor extends OpenAIFieldAutomatorBase {
       if ($arg === '') {
         continue;
       }
-      $arg = openai_field_automator_render_token_prompt($arg, $entity, $config['entity_type'] ?? '');
+      $arg = ai_field_automator_render_token_prompt(
+        $arg,
+        $entity,
+        $config['entity_type'] ?? ''
+      );
       $args[] = $arg;
     }
     return $args;
@@ -114,7 +131,12 @@ class OpenAIFieldAutomatorViewsExtractor extends OpenAIFieldAutomatorBase {
   protected function buildViewExposedFilters($entity, array $config) {
     $raw = $config['views_exposed_filters'] ?? [];
     if (!is_array($raw)) {
-      $lines = preg_split('/\R+/', trim((string) $raw), -1, PREG_SPLIT_NO_EMPTY);
+      $lines = preg_split(
+        '/\R+/',
+        trim((string) $raw),
+        -1,
+        PREG_SPLIT_NO_EMPTY
+      );
       $raw = [];
       foreach ($lines as $line) {
         $parts = explode('=', $line, 2);
@@ -134,21 +156,14 @@ class OpenAIFieldAutomatorViewsExtractor extends OpenAIFieldAutomatorBase {
       if ($key === '' || $value === '') {
         continue;
       }
-      $filters[$key] = openai_field_automator_render_token_prompt($value, $entity, $config['entity_type'] ?? '');
+      $filters[$key] = ai_field_automator_render_token_prompt(
+        $value,
+        $entity,
+        $config['entity_type'] ?? ''
+      );
     }
 
     return $filters;
-  }
-
-  /**
-   * Converts rendered HTML into plain text with basic paragraph boundaries.
-   */
-  protected function htmlToText($html) {
-    $html = preg_replace('/<(br|\/p|\/div|\/li|\/tr|\/h[1-6])[^>]*>/i', "\n", $html);
-    $text = html_entity_decode(strip_tags((string) $html), ENT_QUOTES, 'UTF-8');
-    $text = preg_replace("/[ \t]+\n/", "\n", $text);
-    $text = preg_replace("/\n{3,}/", "\n\n", $text);
-    return trim($text);
   }
 
 }

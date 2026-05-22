@@ -1,17 +1,24 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\reference;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+use TaxonomyTerm;
+
 /**
  * @file
  * Automator plugin for taxonomy term reference fields.
  */
-
-class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorTaxonomyTerms extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Classifies content into existing taxonomy terms and can auto-create missing terms.');
+    return t(
+      'Classifies content into existing taxonomy terms and can auto-create missing terms.'
+    );
   }
 
   /**
@@ -32,6 +39,7 @@ class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
 
     $allow_create = !empty($config['taxonomy_auto_create']);
     $term_map = $this->getAllowedTerms($field_name);
+    $use_tools = $this->shouldUseToolLookup($term_map, $config);
 
     // If there are no existing terms and auto-create is disabled, nothing to do.
     if (empty($term_map) && !$allow_create) {
@@ -41,12 +49,22 @@ class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
     $term_names = array_values($term_map);
     $values = [];
     foreach ($prompts as $prompt) {
-      if (!empty($term_names)) {
-        $prompt .= "\n\nAvailable terms:\n" . implode("\n", $term_names);
+      if ($use_tools) {
+        $messages = [
+          [
+            'role' => 'user',
+            'content' => $prompt . "\n\nUse the taxonomy lookup tools when needed. Return RFC8259 JSON only in this exact format: [{\"value\":\"term name\"}]",
+          ],
+        ];
+        $text = $this->callAIWithTools($messages, ['get_vocabularies', 'get_taxonomy_terms'], $config);
       }
-      $prompt .= "\n\nDo not include explanations. Return RFC8259 JSON only in this exact format: [{\"value\":\"term name\"}]";
-
-      $text = $this->callAI($prompt, $config);
+      else {
+        if (!empty($term_names)) {
+          $prompt .= "\n\nAvailable terms:\n" . implode("\n", $term_names);
+        }
+        $prompt .= "\n\nDo not include explanations. Return RFC8259 JSON only in this exact format: [{\"value\":\"term name\"}]";
+        $text = $this->callAI($prompt, $config);
+      }
       if ($text === '') {
         continue;
       }
@@ -61,12 +79,17 @@ class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
         if ($candidate === '') {
           continue;
         }
-        $values[] = $this->cleanValue($candidate, $config['taxonomy_cleanup'] ?? '');
+        $values[] = $this->cleanValue(
+          $candidate,
+          $config['taxonomy_cleanup'] ?? ''
+        );
       }
     }
 
     $values = array_values(array_unique($values));
-    if (!empty($config['taxonomy_search_similar_tags']) && !empty($values) && !empty($term_names)) {
+    if (!empty($config['taxonomy_search_similar_tags']) && !empty($values)
+      && !empty($term_names)
+    ) {
       $values = $this->searchSimilarTags($values, $term_names, $config);
     }
 
@@ -74,9 +97,29 @@ class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
   }
 
   /**
+   * Uses tools when the vocabulary is large enough to justify live lookups.
+   */
+  protected function shouldUseToolLookup(array $term_map, array $config) {
+    if (empty($term_map) || !module_exists('ai_tools')) {
+      return FALSE;
+    }
+
+    if (!empty($config['taxonomy_use_tools'])) {
+      return TRUE;
+    }
+
+    return count($term_map) > 50;
+  }
+
+  /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values)) {
       return;
     }
@@ -151,16 +194,19 @@ class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
    * Creates a term in the provided vocabulary machine name.
    */
   protected function createTerm($name, $vocabulary_machine_name) {
-    $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_machine_name);
+    $vocabulary = taxonomy_vocabulary_machine_name_load(
+      $vocabulary_machine_name
+    );
     if (!$vocabulary) {
       return 0;
     }
 
     $term = new TaxonomyTerm();
-    $term->name = $name;
+    $term->name = mb_substr($name, 0, 255);
     $term->vocabulary = $vocabulary->machine_name;
     $status = taxonomy_term_save($term);
-    return $status === SAVED_NEW || $status === SAVED_UPDATED ? (int) $term->tid : 0;
+    return $status === SAVED_NEW || $status === SAVED_UPDATED ? (int) $term->tid
+      : 0;
   }
 
   /**
@@ -185,8 +231,13 @@ class OpenAIFieldAutomatorTaxonomyTerms extends OpenAIFieldAutomatorBase {
   /**
    * Uses an extra AI pass to map near-match tags to existing terms.
    */
-  protected function searchSimilarTags(array $values, array $existing_terms, array $config) {
-    $prompt = "Based on available terms and proposed new terms, map new terms to contextually similar existing terms when appropriate.\n";
+  protected function searchSimilarTags(
+    array $values,
+    array $existing_terms,
+    array $config
+  ) {
+    $prompt
+      = "Based on available terms and proposed new terms, map new terms to contextually similar existing terms when appropriate.\n";
     $prompt .= "Do not include explanations. Return RFC8259 JSON only in this exact format: [{\"available_term\":\"existing term\",\"new_term\":\"new term\"}]\n\n";
     $prompt .= "Available terms:\n" . implode("\n", $existing_terms) . "\n\n";
     $prompt .= "New terms:\n" . implode("\n", $values) . "\n";

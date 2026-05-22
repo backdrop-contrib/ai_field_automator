@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\structured;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Generates structured metatag JSON values.
  */
-class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorMetatag extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,7 @@ class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('metatag');
+    return ['metatag'];
   }
 
   /**
@@ -25,15 +30,16 @@ class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
-      return array();
+      return [];
     }
 
     $keys = $this->getRequestedKeys($config);
     $template = array_fill_keys($keys, '');
 
-    $values = array();
+    $values = [];
     foreach ($prompts as $prompt) {
-      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":" . json_encode($template) . "}]";
+      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":"
+        . json_encode($template) . "}]";
       $text = $this->callAI($prompt, $config);
       if ($text === '') {
         continue;
@@ -43,21 +49,27 @@ class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
         continue;
       }
       if ($this->isAssoc($rows)) {
-        $rows = array($rows);
+        $rows = [$rows];
       }
       foreach ($rows as $row) {
-        $candidate = isset($row['value']) && is_array($row['value']) ? $row['value'] : $row;
+        $candidate = isset($row['value']) && is_array($row['value'])
+          ? $row['value'] : $row;
         if (!is_array($candidate)) {
           continue;
         }
-        $filtered = array();
+        $filtered = [];
         foreach ($keys as $key) {
-          if (isset($candidate[$key]) && trim((string) $candidate[$key]) !== '') {
+          if (isset($candidate[$key])
+            && trim((string) $candidate[$key]) !== ''
+          ) {
             $filtered[$key] = trim((string) $candidate[$key]);
           }
         }
         if (!empty($filtered)) {
-          $values[] = json_encode($filtered, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+          $values[] = json_encode(
+            $filtered,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+          );
         }
       }
     }
@@ -68,19 +80,19 @@ class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function checkIfEmpty(array $value, array $config = array()) {
+  public function checkIfEmpty(array $value, array $config = []) {
     if (empty($value[0]['value'])) {
-      return array();
+      return [];
     }
 
     $existing = json_decode($value[0]['value'], TRUE);
     if (!is_array($existing)) {
-      return array();
+      return [];
     }
 
     foreach ($this->getRequestedKeys($config) as $key) {
       if (empty($existing[$key])) {
-        return array();
+        return [];
       }
     }
 
@@ -90,7 +102,12 @@ class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values[0])) {
       return;
     }
@@ -106,13 +123,18 @@ class OpenAIFieldAutomatorMetatag extends OpenAIFieldAutomatorBase {
    * Returns metatag keys to generate.
    */
   protected function getRequestedKeys(array $config) {
-    $raw = $config['metatag_keys'] ?? array();
+    $raw = $config['metatag_keys'] ?? [];
     if (!is_array($raw)) {
-      $raw = preg_split('/\s*,\s*/', trim((string) $raw), -1, PREG_SPLIT_NO_EMPTY);
+      $raw = preg_split(
+        '/\s*,\s*/',
+        trim((string) $raw),
+        -1,
+        PREG_SPLIT_NO_EMPTY
+      );
     }
     $keys = array_values(array_unique(array_filter(array_map('trim', $raw))));
     if (empty($keys)) {
-      $keys = array('title', 'description', 'og:title', 'og:description');
+      $keys = ['title', 'description', 'og:title', 'og:description'];
     }
     return $keys;
   }

@@ -1,17 +1,23 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for email fields.
  */
-
-class OpenAIFieldAutomatorEmail extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorEmail extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Generates an email address and stores the first valid email found.');
+    return t(
+      'Generates an email address and stores the first valid email found.'
+    );
   }
 
   /**
@@ -44,7 +50,12 @@ class OpenAIFieldAutomatorEmail extends OpenAIFieldAutomatorBase {
       }
       foreach ($rows as $row) {
         $candidate = (string) ($row['value'] ?? '');
-        if (preg_match('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $candidate, $m)) {
+        if (preg_match(
+          '/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i',
+          $candidate,
+          $m
+        )
+        ) {
           $email = strtolower($m[0]);
           if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $values[] = $email;

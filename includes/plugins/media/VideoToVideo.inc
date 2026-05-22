@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\media;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Cuts and combines video clips based on AI-selected timestamps.
  */
-class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorVideoToVideo extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,14 +21,14 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('file');
+    return ['file'];
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedInputs() {
-    return array('file');
+    return ['file'];
   }
 
   /**
@@ -39,29 +44,40 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $base_field = $config['base_field'] ?? '';
     if ($base_field === '' || empty($entity->{$base_field}[LANGUAGE_NONE])) {
-      return array();
+      return [];
     }
 
     if (!$this->isFfmpegAvailable()) {
-      return array();
+      return [];
     }
 
-    $speech_model = $config['speech_model'] ?? 'openai/whisper-1';
+    $speech_model = $config['speech_model'] ?? (config_get('ai.settings', 'default_stt_model') ?: 'whisper-1');
     $stripped_speech_model = '';
-    $speech_api = openai_get_api_for_model($speech_model, $stripped_speech_model);
+    $speech_api = ai_get_api_for_model(
+      $speech_model,
+      $stripped_speech_model
+    );
     if (!$speech_api) {
-      return array();
+      return [];
     }
 
-    $instruction = trim((string) ($config['prompt'] ?? 'Select the best video segments to keep.'));
+    $instruction = trim(
+      (string) ($config['prompt'] ?? 'Select the best video segments to keep.')
+    );
     if (($config['mode'] ?? 'base') === 'token' && !empty($config['token'])) {
-      $instruction = trim((string) openai_field_automator_render_token_prompt($config['token'], $entity, $config['entity_type'] ?? ''));
+      $instruction = trim(
+        (string) ai_field_automator_render_token_prompt(
+          $config['token'],
+          $entity,
+          $config['entity_type'] ?? ''
+        )
+      );
     }
     if ($instruction === '') {
       $instruction = 'Select the best video segments to keep.';
     }
 
-    $values = array();
+    $values = [];
     foreach ($entity->{$base_field}[LANGUAGE_NONE] as $item) {
       if (empty($item['fid'])) {
         continue;
@@ -78,13 +94,17 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
         continue;
       }
 
-      $transcript = $speech_api->speechToText($stripped_speech_model ?: $speech_model, $path, 'transcribe');
+      $transcript = $speech_api->speechToText(
+        $stripped_speech_model ?: $speech_model,
+        $path,
+        'transcribe'
+      );
       if (!is_string($transcript) || trim($transcript) === '') {
         continue;
       }
 
       $prompt = $instruction . "\n\nVideo transcript:\n" . trim($transcript);
-      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"start_time\":\"HH:MM:SS(.ms)\",\"end_time\":\"HH:MM:SS(.ms)\"}}]";
+      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"start_time\":\"HH:MM:SS(.ms]\",\"end_time\":\"HH:MM:SS(.ms]\"}}]";
       $text = $this->callAI($prompt, $config);
       if ($text === '') {
         continue;
@@ -94,26 +114,30 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
         continue;
       }
       if ($this->isAssoc($rows)) {
-        $rows = array($rows);
+        $rows = [$rows];
       }
       foreach ($rows as $row) {
         $candidate = isset($row['value']) ? $row['value'] : $row;
         if (!is_array($candidate)) {
           continue;
         }
-        $start = $this->normalizeTimestamp($candidate['start_time'] ?? $candidate['start'] ?? '');
-        $end = $this->normalizeTimestamp($candidate['end_time'] ?? $candidate['end'] ?? '');
+        $start = $this->normalizeTimestamp(
+          $candidate['start_time'] ?? $candidate['start'] ?? ''
+        );
+        $end = $this->normalizeTimestamp(
+          $candidate['end_time'] ?? $candidate['end'] ?? ''
+        );
         if ($start === '' || $end === '') {
           continue;
         }
         if ($this->timeToSeconds($end) <= $this->timeToSeconds($start)) {
           continue;
         }
-        $values[] = array(
-          'fid' => (int) $item['fid'],
+        $values[] = [
+          'fid'        => (int) $item['fid'],
           'start_time' => $start,
-          'end_time' => $end,
-        );
+          'end_time'   => $end,
+        ];
       }
     }
 
@@ -123,14 +147,21 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values) || !$this->isFfmpegAvailable()) {
       return;
     }
 
-    $grouped = array();
+    $grouped = [];
     foreach ($values as $value) {
-      if (empty($value['fid']) || empty($value['start_time']) || empty($value['end_time'])) {
+      if (empty($value['fid']) || empty($value['start_time'])
+        || empty($value['end_time'])
+      ) {
         continue;
       }
       $grouped[(int) $value['fid']][] = $value;
@@ -139,7 +170,7 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
       return;
     }
 
-    $items = array();
+    $items = [];
     foreach ($grouped as $fid => $segments) {
       $source_file = file_load($fid);
       if (!$source_file || empty($source_file->uri)) {
@@ -150,18 +181,23 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
         continue;
       }
 
-      $tmp_dir = file_directory_temp() . '/openai_field_automator_' . uniqid();
-      if (!file_prepare_directory($tmp_dir, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS)) {
+      $tmp_dir = file_directory_temp() . '/ai_field_automator_' . uniqid();
+      if (!file_prepare_directory(
+        $tmp_dir,
+        FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS
+      )
+      ) {
         continue;
       }
 
-      $segment_paths = array();
+      $segment_paths = [];
       foreach ($segments as $delta => $segment) {
         $segment_path = $tmp_dir . '/segment_' . $delta . '.mp4';
         $command = 'ffmpeg -y -nostdin -i ' . escapeshellarg($source_path)
           . ' -ss ' . escapeshellarg($segment['start_time'])
           . ' -to ' . escapeshellarg($segment['end_time'])
-          . ' -c:v libx264 -c:a aac ' . escapeshellarg($segment_path) . ' 2>/dev/null';
+          . ' -c:v libx264 -c:a aac ' . escapeshellarg($segment_path)
+          . ' 2>/dev/null';
         @shell_exec($command);
         if (is_file($segment_path) && filesize($segment_path) > 0) {
           $segment_paths[] = $segment_path;
@@ -176,7 +212,7 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
       $final_path = $segment_paths[0];
       if (count($segment_paths) > 1) {
         $list_path = $tmp_dir . '/concat.txt';
-        $lines = array();
+        $lines = [];
         foreach ($segment_paths as $segment_path) {
           $lines[] = "file '" . str_replace("'", "'\\''", $segment_path) . "'";
         }
@@ -184,7 +220,8 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
         $final_path = $tmp_dir . '/combined.mp4';
         $concat_command = 'ffmpeg -y -nostdin -f concat -safe 0 -i '
           . escapeshellarg($list_path)
-          . ' -c:v libx264 -c:a aac ' . escapeshellarg($final_path) . ' 2>/dev/null';
+          . ' -c:v libx264 -c:a aac ' . escapeshellarg($final_path)
+          . ' 2>/dev/null';
         @shell_exec($concat_command);
         if (!is_file($final_path) || filesize($final_path) === 0) {
           $final_path = $segment_paths[0];
@@ -193,12 +230,15 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
 
       $binary = @file_get_contents($final_path);
       if ($binary !== FALSE && $binary !== '') {
-        $managed = $this->createManagedFile($binary, 'ai-video-cut-' . REQUEST_TIME . '-' . $fid . '.mp4');
+        $managed = $this->createManagedFile(
+          $binary,
+          'ai-video-cut-' . REQUEST_TIME . '-' . $fid . '.mp4'
+        );
         if ($managed && !empty($managed->fid)) {
-          $items[] = array(
-            'fid' => (int) $managed->fid,
+          $items[] = [
+            'fid'     => (int) $managed->fid,
             'display' => 1,
-          );
+          ];
         }
       }
 
@@ -223,7 +263,7 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
    */
   protected function normalizeTimestamp($value) {
     $value = trim((string) $value);
-    if (preg_match('/^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$/', $value)) {
+    if (preg_match('/^\d{1,2}:\d{2}:\d{2}(?:\.\d+]?$/', $value)) {
       return $value;
     }
     if (preg_match('/^\d+$/', $value)) {
@@ -280,4 +320,3 @@ class OpenAIFieldAutomatorVideoToVideo extends OpenAIFieldAutomatorBase {
   }
 
 }
-

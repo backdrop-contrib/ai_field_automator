@@ -1,11 +1,15 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for telephone fields.
  */
-
-class OpenAIFieldAutomatorTelephone extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorTelephone extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -44,7 +48,7 @@ class OpenAIFieldAutomatorTelephone extends OpenAIFieldAutomatorBase {
       }
       foreach ($rows as $row) {
         $candidate = trim((string) ($row['value'] ?? ''));
-        if (preg_match('/^\+\(?[0-9]{1,3}\)?[ ]?[0-9]{6,12}$/', $candidate)) {
+        if (preg_match('/^\+\(?[0-9]{1,3}\]?[ ]?[0-9]{6,12}$/', $candidate)) {
           $values[] = $candidate;
         }
       }

@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\domain;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Automator for chart-config style fields.
  */
-class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorChartFromText extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,7 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('chart_config');
+    return ['chart_config'];
   }
 
   /**
@@ -25,10 +30,10 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
-      return array();
+      return [];
     }
 
-    $values = array();
+    $values = [];
     foreach ($prompts as $prompt) {
       $prompt .= "\n\nReturn CSV only, no explanations and no markdown.";
       $prompt .= "\nUse ';' as delimiter. First row must be headers, following rows data.";
@@ -36,7 +41,7 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
       if (!is_string($text) || trim($text) === '') {
         continue;
       }
-      $clean = trim(str_replace(array('```csv', '```'), '', $text));
+      $clean = trim(str_replace(['```csv', '```'], '', $text));
       if ($clean !== '') {
         $values[] = $clean;
       }
@@ -48,9 +53,9 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function checkIfEmpty(array $value, array $config = array()) {
+  public function checkIfEmpty(array $value, array $config = []) {
     if (empty($value[0]['config']['series']['data_collector_table'][0][0]['data'])) {
-      return array();
+      return [];
     }
     return $value;
   }
@@ -58,7 +63,12 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
   /**
    * {@inheritdoc}
    */
-  public function storeValues($entity, array $values, $field_name, array $config) {
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  ) {
     if (empty($values[0])) {
       return;
     }
@@ -73,19 +83,19 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
     $csv = (string) $values[0];
 
     // Generic fallback: store raw CSV in primary column.
-    $item = array($primary => $csv);
+    $item = [$primary => $csv];
 
     // Chart-config-style storage: build data collector table when possible.
     if (in_array('config', $columns, TRUE)) {
       $table = $this->csvToTable($csv);
       if (!empty($table)) {
-        $item = array(
-          'config' => array(
-            'series' => array(
+        $item = [
+          'config' => [
+            'series' => [
               'data_collector_table' => $table,
-            ),
-          ),
-        );
+            ],
+          ],
+        ];
       }
     }
 
@@ -98,23 +108,27 @@ class OpenAIFieldAutomatorChartFromText extends OpenAIFieldAutomatorBase {
   protected function csvToTable($csv) {
     $rows = preg_split('/\r\n|\r|\n/', trim($csv));
     if (empty($rows)) {
-      return array();
+      return [];
     }
 
-    $table = array();
+    $table = [];
     foreach ($rows as $row_index => $line) {
       $line = trim($line);
       if ($line === '') {
         continue;
       }
-      $delimiter = (substr_count($line, ';') >= substr_count($line, ',')) ? ';' : ',';
+      $delimiter = (substr_count($line, ';') >= substr_count($line, ',')) ? ';'
+        : ',';
       $cells = str_getcsv($line, $delimiter);
       foreach ($cells as $cell_index => $cell) {
-        $table[$row_index][$cell_index]['data'] = trim($cell, " \t\n\r\0\x0B\"");
+        $table[$row_index][$cell_index]['data'] = trim(
+          $cell,
+          " \t\n\r\0\x0B\""
+        );
       }
     }
 
-    return !empty($table) ? array_values($table) : array();
+    return !empty($table) ? array_values($table) : [];
   }
 
   /**

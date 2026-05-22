@@ -1,17 +1,23 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for list/option fields.
  */
-
-class OpenAIFieldAutomatorOptions extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorOptions extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Generates an option and maps it to an allowed value key for list fields.');
+    return t(
+      'Generates an option and maps it to an allowed value key for list fields.'
+    );
   }
 
   /**

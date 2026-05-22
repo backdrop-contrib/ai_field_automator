@@ -1,12 +1,12 @@
-# OpenAI Field Automator
+# AI Field Automator
 
-The OpenAI Field Automator module lets you attach AI generation rules directly
+The AI Field Automator module lets you attach AI generation rules directly
 to Backdrop field instances. When enabled on a field, the module can populate
 that field from another field, from rendered entity content, from tokens, from
 media inputs, or from search results depending on the selected automator type.
 
-This module is intended for the Backdrop `openai` ecosystem and follows the
-same provider/model configuration used by the rest of the OpenAI modules in
+This module is intended for the Backdrop `ai` ecosystem and follows the
+same provider/model configuration used by the rest of the AI modules in
 this codebase.
 
 ## Features
@@ -16,26 +16,25 @@ this codebase.
 - Rule ordering by weight
 - Text, scalar, reference, media, structured, search, and domain-specific
   automator types
-- Optional async widget-action generation when `openai_async` is enabled
+- Optional async widget-action generation when `ai_async` is enabled
 
 ## Requirements
 
 - Backdrop CMS 1.x
-- The `openai` module
+- The `ai` module
 
 Some automator types require additional modules or field types, for example:
 
 - `token` support for token-mode prompts
-- `search_api_ai` for vector-search automators
+- `ai_search` for vector-search automators
 - media/file/image-related modules for media automators
 
 ## Installation
 
-- Install this module using the official [Backdrop CMS instructions](https://backdropcms.org/user-guide/modules).
-
-## Issues
-
-Bugs and feature requests should be reported in the [Issue Queue](https://github.com/backdrop-contrib/openai_field_automator/issues).
+1. Place the module in `modules/custom/`
+2. Enable it with `bee pm-enable ai_field_automator` or from
+   `admin/modules`
+3. Make sure at least one AI provider/model is configured
 
 ## Configuration
 
@@ -50,7 +49,7 @@ Bugs and feature requests should be reported in the [Issue Queue](https://github
 
 The module also provides an overview page at:
 
-- `/admin/config/openai/field-automator`
+- `/admin/config/ai/field-automator`
 
 ## Worker Modes
 
@@ -72,7 +71,17 @@ The module includes a broad set of automator types for:
 
 The full type reference is documented in:
 
-- [AUTOMATOR_TYPES.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/custom/openai_field_automator/AUTOMATOR_TYPES.md)
+- [AUTOMATOR_TYPES.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/AUTOMATOR_TYPES.md)
+
+## More Documentation
+
+Implementation details and module architecture are documented separately in:
+
+- [HOW_IT_WORKS.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/HOW_IT_WORKS.md)
+
+Focused Xdebug notes for the `post.field_summary` widget-action automator are in:
+
+- [DEBUGGING_FIELD_SUMMARY.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/DEBUGGING_FIELD_SUMMARY.md)
 
 ## Notes
 
@@ -81,14 +90,11 @@ The full type reference is documented in:
   automators
 - For queue/cron workers, choose an explicit text format when needed because
   cron may run as anonymous
-
-## Current Maintainer
-
-[Justin Keiser](https://github.com/keiserjb)
-
 ## Credits
 
-- Created for Backdrop CMS by [Justin Keiser](https://github.com/keiserjb).  Inspired by the [Drupal implementation](https://www.drupal.org/project/ai).
+- Created for Backdrop CMS by [Justin Keiser](https://github.com/keiserjb).
+- Inspired by the Drupal AI Automators module.
+- Developed with AI assistance.
 
 ## License
 

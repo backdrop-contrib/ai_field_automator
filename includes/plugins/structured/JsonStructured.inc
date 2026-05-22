@@ -1,9 +1,14 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\structured;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * Generates structured JSON output.
  */
-class OpenAIFieldAutomatorJsonStructured extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorJsonStructured extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
@@ -16,7 +21,13 @@ class OpenAIFieldAutomatorJsonStructured extends OpenAIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return array('json', 'json_native', 'json_native_binary', 'text_long', 'string_long');
+    return [
+      'json',
+      'json_native',
+      'json_native_binary',
+      'text_long',
+      'string_long',
+    ];
   }
 
   /**
@@ -25,11 +36,11 @@ class OpenAIFieldAutomatorJsonStructured extends OpenAIFieldAutomatorBase {
   public function generate($entity, $field_name, array $config) {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
-      return array();
+      return [];
     }
 
     $schema = trim((string) ($config['json_schema'] ?? ''));
-    $values = array();
+    $values = [];
     foreach ($prompts as $prompt) {
       $prompt .= "\n\nReturn RFC8259 JSON only. Do not include prose, markdown, or code fences.";
       if ($schema !== '') {
@@ -53,13 +64,16 @@ class OpenAIFieldAutomatorJsonStructured extends OpenAIFieldAutomatorBase {
       return '';
     }
 
-    $clean = trim(str_replace(array('```json', '```'), '', $response));
+    $clean = trim(str_replace(['```json', '```'], '', $response));
     $decoded = json_decode($clean, TRUE);
     if (!is_array($decoded)) {
       return '';
     }
 
-    return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return json_encode(
+      $decoded,
+      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
   }
 
 }

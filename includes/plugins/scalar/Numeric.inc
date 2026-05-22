@@ -1,24 +1,37 @@
 <?php
 
+
+namespace ai_field_automator\includes\plugins\scalar;
+
+use ai_field_automator\includes\AIFieldAutomatorBase;
+
 /**
  * @file
  * Automator plugin for numeric fields.
  */
-
-class OpenAIFieldAutomatorNumeric extends OpenAIFieldAutomatorBase {
+class AIFieldAutomatorNumeric extends AIFieldAutomatorBase {
 
   /**
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Generates a numeric value and stores it in an integer/decimal/float field.');
+    return t(
+      'Generates a numeric value and stores it in an integer/decimal/float field.'
+    );
   }
 
   /**
    * {@inheritdoc}
    */
   public function allowedFieldTypes() {
-    return ['number_integer', 'number_decimal', 'number_float', 'integer', 'decimal', 'float'];
+    return [
+      'number_integer',
+      'number_decimal',
+      'number_float',
+      'integer',
+      'decimal',
+      'float',
+    ];
   }
 
   /**
@@ -47,7 +60,7 @@ class OpenAIFieldAutomatorNumeric extends OpenAIFieldAutomatorBase {
 
       foreach ($rows as $row) {
         $candidate = (string) ($row['value'] ?? '');
-        if (!preg_match('/-?\d+(?:[.,]\d+)?/', $candidate, $m)) {
+        if (!preg_match('/-?\d+(?:[.,]\d+]?/', $candidate, $m)) {
           continue;
         }
         $number = str_replace(',', '.', $m[0]);

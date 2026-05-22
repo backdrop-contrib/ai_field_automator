@@ -1,11 +1,13 @@
 <?php
 
+
+namespace ai_field_automator\includes;
+
 /**
  * @file
- * Interface for OpenAI Field Automator plugins.
+ * Interface for AI Field Automator plugins.
  */
-
-interface OpenAIFieldAutomatorInterface {
+interface AIFieldAutomatorInterface {
 
   /**
    * Returns help text shown in the admin UI.
@@ -29,7 +31,7 @@ interface OpenAIFieldAutomatorInterface {
    *   The entity being saved.
    * @param string $field_name
    *   The field machine name.
-   * @param array $config
+   * @param array  $config
    *   The rule configuration array.
    *
    * @return bool
@@ -43,7 +45,7 @@ interface OpenAIFieldAutomatorInterface {
    *   The entity being saved.
    * @param string $field_name
    *   The destination field machine name.
-   * @param array $config
+   * @param array  $config
    *   The rule configuration array.
    *
    * @return array
@@ -73,47 +75,52 @@ interface OpenAIFieldAutomatorInterface {
    * @return mixed
    *   Normalized value used to decide whether generation should run.
    */
-  public function checkIfEmpty(array $value, array $config = array());
+  public function checkIfEmpty(array $value, array $config = []);
 
   /**
    * Optional second-pass normalization after checkIfEmpty().
    *
    * @param object $entity
    *   The entity being saved.
-   * @param mixed $value
+   * @param mixed  $value
    *   Value returned from checkIfEmpty().
-   * @param array $config
+   * @param array  $config
    *   The rule configuration array.
    *
    * @return mixed
    *   Post-processed value.
    */
-  public function postCheckIfEmpty($entity, $value, array $config = array());
+  public function postCheckIfEmpty($entity, $value, array $config = []);
 
   /**
    * Writes the generated values back onto the entity.
    *
    * @param object $entity
    *   The entity being saved (modified in-place).
-   * @param array $values
+   * @param array  $values
    *   Array of generated value strings.
    * @param string $field_name
    *   The destination field machine name.
-   * @param array $config
+   * @param array  $config
    *   The rule configuration array.
    */
-  public function storeValues($entity, array $values, $field_name, array $config);
+  public function storeValues(
+    $entity,
+    array $values,
+    $field_name,
+    array $config
+  );
 
   /**
    * Verifies a generated value before it is written back to the entity.
    *
    * @param object $entity
    *   The entity being saved.
-   * @param mixed $value
+   * @param mixed  $value
    *   Candidate generated value.
    * @param string $field_name
    *   Destination field machine name.
-   * @param array $config
+   * @param array  $config
    *   The rule configuration array.
    *
    * @return bool
