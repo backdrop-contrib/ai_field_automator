@@ -60,10 +60,16 @@ class AIFieldAutomatorNumeric extends AIFieldAutomatorBase {
 
       foreach ($rows as $row) {
         $candidate = (string) ($row['value'] ?? '');
-        if (!preg_match('/-?\d+(?:[.,]\d+]?/', $candidate, $m)) {
+        $candidate = trim($candidate);
+        if (!preg_match('/^[-+]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/', $candidate, $m)) {
           continue;
         }
-        $number = str_replace(',', '.', $m[0]);
+        $unsigned = ltrim($candidate, '+-');
+        if (preg_match('/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/', $unsigned)
+          || preg_match('/^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/', $unsigned)) {
+          continue;
+        }
+        $number = str_replace(',', '.', $candidate);
         if (in_array($field_type, ['number_integer', 'integer'])) {
           $values[] = (int) round((float) $number);
         }

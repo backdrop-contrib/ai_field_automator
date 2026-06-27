@@ -15,7 +15,7 @@ class AIFieldAutomatorLink extends AIFieldAutomatorBase {
    * {@inheritdoc}
    */
   public function helpText() {
-    return t('Extracts URLs (and optional link text] from context.');
+    return t('Extracts URLs (and optional link text) from context.');
   }
 
   /**

@@ -82,7 +82,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   $form['ai_automator']['automator_label'] = [
     '#type'          => 'textfield',
     '#title'         => t('Automator label'),
-    '#description'   => t('A human-readable name for this automator (e.g. "Auto-generate tags"]. Shown in the Run Order tab.'),
+    '#description'   => t('A human-readable name for this automator (e.g. "Auto-generate tags"). Shown in the Run Order tab.'),
     '#default_value' => $config['label'] ?? '',
     '#maxlength'     => 255,
     '#access'        => $current_enabled,
@@ -132,14 +132,14 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     }
     $fi = field_info_field($fname);
     if (empty($allowed_inputs) || in_array($fi['type'], $allowed_inputs)) {
-      $base_options[$fname] = $finstance['label'] . ' (' . $fname . ']';
+      $base_options[$fname] = $finstance['label'] . ' (' . $fname . ')';
     }
   }
   // Always include the node title as a context source.
   $base_options['_title'] = t('Title / Label');
   $base_options['_rendered_entity'] = ($entity_type === 'node')
-    ? t('Rendered node text (all fields + paragraphs]')
-    : t('Rendered entity text (all fields]');
+    ? t('Rendered node text (all fields + paragraphs)')
+    : t('Rendered entity text (all fields)');
 
   $mode_options = [
     'base' => t('Base mode'),
@@ -174,7 +174,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
 
   $form['ai_automator']['settings_wrapper']['automator_base_field'] = [
     '#type'          => 'select',
-    '#title'         => t('Base field (context]'),
+    '#title'         => t('Base field (context)'),
     '#description'   => t('This field\'s value will be passed to the AI as context.'),
     '#options'       => $base_options,
     '#default_value' => $config['base_field'] ?? '',
@@ -302,7 +302,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   }
   $form['ai_automator']['settings_wrapper']['automator_entityreference_auto_create'] = [
     '#type' => 'checkbox',
-    '#title' => t('Auto-create missing referenced entities (nodes only]'),
+    '#title' => t('Auto-create missing referenced entities (nodes only)'),
     '#default_value' => !empty($config['entityreference_auto_create']),
     '#states' => [
       'visible' => [
@@ -389,7 +389,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       }
       $form['ai_automator']['settings_wrapper']['automator_entityreference_generate_fields']['automator_entity_field_enable_' . $target_field_name] = [
         '#type' => 'checkbox',
-        '#title' => $target_instance['label'] . ' (' . $target_field_name . ']',
+        '#title' => $target_instance['label'] . ' (' . $target_field_name . ')',
         '#default_value' => !empty($config['entityreference_generate_fields'][$target_field_name]),
       ];
       $form['ai_automator']['settings_wrapper']['automator_entityreference_generate_fields']['automator_entity_field_generate_' . $target_field_name] = [
@@ -548,7 +548,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       continue;
     }
     if (in_array($fi['type'], ['text', 'text_long', 'text_with_summary', 'string_long'], TRUE)) {
-      $explanation_field_options[$fname] = $finstance['label'] . ' (' . $fname . ']';
+      $explanation_field_options[$fname] = $finstance['label'] . ' (' . $fname . ')';
     }
   }
 
@@ -564,7 +564,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   $form['ai_automator']['settings_wrapper']['automator_metatag_keys'] = [
     '#type' => 'textfield',
     '#title' => t('Metatag keys'),
-    '#description' => t('Comma-separated keys to generate (e.g. <code>title, description, og:title, og:description</code>].'),
+    '#description' => t('Comma-separated keys to generate (e.g. <code>title, description, og:title, og:description</code>).'),
     '#default_value' => !empty($config['metatag_keys']) ? implode(', ', (array) $config['metatag_keys']) : '',
     '#states' => _ai_field_automator_type_states(['metatag']),
   ];
@@ -642,7 +642,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   $form['ai_automator']['settings_wrapper']['automator_search_minimum_score'] = [
     '#type' => 'textfield',
     '#title' => t('Minimum score'),
-    '#description' => t('Optional threshold for accepted matches (0-1]. Leave 0 for no threshold.'),
+    '#description' => t('Optional threshold for accepted matches (0-1). Leave 0 for no threshold.'),
     '#default_value' => (string) ($config['search_minimum_score'] ?? '0'),
     '#states' => _ai_field_automator_type_states(['vector_search_text', 'vector_search_entity_reference']),
   ];
@@ -657,7 +657,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   $form['ai_automator']['settings_wrapper']['automator_views_view'] = [
     '#type' => 'select',
     '#title' => t('View display'),
-    '#description' => t('Choose a View and display to execute (format: view_name:display_id].'),
+    '#description' => t('Choose a View and display to execute (format: view_name:display_id).'),
     '#options' => ['' => t('-- Select view display --')] + ai_field_automator_get_view_display_options(),
     '#default_value' => $config['views_view'] ?? '',
     '#states' => _ai_field_automator_type_states(['views_extract_text']),
@@ -687,11 +687,8 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
 
   // Agent plugin fields.
   $agent_options = ['' => t('-- Select agent --')];
-  if (module_exists('ai_agent')) {
-    $agents = config_get('ai_agent.settings', 'agents') ?: [];
-    foreach ($agents as $aid => $agent) {
-      $agent_options[$aid] = $agent['label'] ?? $aid;
-    }
+  if (module_exists('ai_agents') && function_exists('ai_agents_list_agent_options')) {
+    $agent_options += ai_agents_list_agent_options();
   }
   $form['ai_automator']['settings_wrapper']['automator_agent_id'] = [
     '#type'          => 'select',
@@ -746,7 +743,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
         '#type'          => 'textfield',
         '#title'         => t('Model'),
         '#default_value' => $chosen_model,
-        '#description'   => t('Enter the fully-qualified model ID (e.g. <code>provider/model</code>, <code>ollama/llama3.2</code>, <code>anthropic/claude-3-5-sonnet</code>].'),
+        '#description'   => t('Enter the fully-qualified model ID (e.g. <code>provider/model</code>, <code>ollama/llama3.2</code>, <code>anthropic/claude-3-5-sonnet</code>).'),
       ];
     }
 
@@ -755,7 +752,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#title'         => t('Temperature'),
       '#default_value' => $config['temperature'] ?? 0.7,
       '#size'          => 6,
-      '#description'   => t('Sampling temperature 0–2.0. Higher values mean more random output. Not used by reasoning models (forced to 1].'),
+      '#description'   => t('Sampling temperature 0–2.0. Higher values mean more random output. Not used by reasoning models (forced to 1).'),
     ];
 
     $form['ai_automator']['settings_wrapper']['provider_config']['automator_frequency_penalty'] = [
@@ -779,7 +776,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#title'         => t('Top P'),
       '#default_value' => $config['top_p'] ?? 1,
       '#size'          => 6,
-      '#description'   => t('Nucleus sampling (0–1]. Alternative to temperature.'),
+      '#description'   => t('Nucleus sampling (0–1). Alternative to temperature.'),
     ];
 
     $form['ai_automator']['settings_wrapper']['provider_config']['automator_max_tokens'] = [
@@ -795,13 +792,13 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       '#type'          => 'select',
       '#title'         => t('Reasoning Effort'),
       '#options'       => [
-        ''       => t('-- Default (medium] --'),
+        ''       => t('-- Default (medium) --'),
         'low'    => t('Low — faster, less thorough'),
         'medium' => t('Medium'),
         'high'   => t('High — slower, more thorough'),
       ],
       '#default_value' => $config['reasoning_effort'] ?? '',
-      '#description'   => t('Only used by reasoning models (o1, o3, o4-mini, etc.]. Ignored for standard models.'),
+      '#description'   => t('Only used by reasoning models (o1, o3, o4-mini, etc.). Ignored for standard models.'),
     ];
 
     // Image field selector — for vision-capable models.
@@ -812,7 +809,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
         continue;
       }
       if (in_array($fi['type'], ['image', 'file', 'media'], TRUE)) {
-        $image_field_options[$fname] = $finstance['label'] . ' (' . $fname . ']';
+        $image_field_options[$fname] = $finstance['label'] . ' (' . $fname . ')';
       }
     }
     if (count($image_field_options) > 1) {
@@ -837,7 +834,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#type'          => 'select',
     '#title'         => t('Edit mode'),
     '#options'       => [
-      'skip'    => t('Skip — never overwrite an existing value (default]'),
+      'skip'    => t('Skip — never overwrite an existing value (default)'),
       'changed' => t('Edit when changed — regenerate only when the source field changes'),
       'always'  => t('Always overwrite — regenerate on every save'),
     ],
@@ -850,7 +847,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#title' => t('Automator Worker'),
     '#options' => [
       'widget_action' => t('Widget action - Adds a "Generate with AI" button on the field widget and runs on demand without saving.'),
-      'batch' => t('Batch - Uses JavaScript batch queue (not recommended], will not work on programmatical saving.'),
+      'batch' => t('Batch - Uses JavaScript batch queue (not recommended), will not work on programmatical saving.'),
       'queue_cron' => t('Queue/Cron - Saves as a queue worker and runs on cron.'),
       'direct' => t('Direct - Processes and saves the value directly.'),
     ],
@@ -872,17 +869,17 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
     '#description'   => t('If the AI returns multiple values, join them into a single value using this separator. Leave empty to keep multiple values.'),
     '#options'       => [
       ''          => t("-- Don't join --"),
-      ', '        => t('Comma + space (, ]'),
+      ', '        => t('Comma + space (, )'),
       ' '         => t('Space'),
-      '. '        => t('Period + space (. ]'),
+      '. '        => t('Period + space (. )'),
       '\n'        => t('New line'),
       '\t'        => t('Tab'),
-      '<br />'    => t('HTML line break (<br />]'),
+      '<br />'    => t('HTML line break (<br />)'),
       '<br /><br />' => t('HTML double break'),
-      '<hr />'    => t('HTML horizontal rule (<hr />]'),
-      ','         => t('Comma (,]'),
-      ';'         => t('Semicolon (;]'),
-      '.'         => t('Period (.]'),
+      '<hr />'    => t('HTML horizontal rule (<hr />)'),
+      ','         => t('Comma (,)'),
+      ';'         => t('Semicolon (;)'),
+      '.'         => t('Period (.)'),
       'other'     => t('Custom…'),
     ],
     '#default_value' => $config['joiner'] ?? '',
@@ -1163,7 +1160,7 @@ function ai_field_automator_get_search_index_options() {
   $indexes = search_api_index_load_multiple(FALSE, ['enabled' => 1]);
   foreach ($indexes as $index) {
     $label = !empty($index->name) ? $index->name : $index->machine_name;
-    $options[$index->machine_name] = $label . ' (' . $index->machine_name . ']';
+    $options[$index->machine_name] = $label . ' (' . $index->machine_name . ')';
   }
 
   return $options;

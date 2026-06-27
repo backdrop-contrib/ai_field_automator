@@ -21,7 +21,7 @@ class AIFieldAutomatorDateExtract extends AIFieldAutomatorBase {
    */
   public function helpText() {
     return t(
-      'Extracts dates from text content (any format] and stores them in a date/datetime/datestamp field. Handles inconsistent date formats, relative dates, and optional end dates.'
+      'Extracts dates from text content (any format) and stores them in a date/datetime/datestamp field. Handles inconsistent date formats, relative dates, and optional end dates.'
     );
   }
 
@@ -112,7 +112,7 @@ class AIFieldAutomatorDateExtract extends AIFieldAutomatorBase {
         $granularity
       );
     if ($has_time) {
-      $format_desc = 'YYYY-MM-DDTHH:MM:SS (ISO 8601]';
+      $format_desc = 'YYYY-MM-DDTHH:MM:SS (ISO 8601)';
       $example_val = '2025-03-15T14:30:00';
     }
     else {
@@ -121,7 +121,7 @@ class AIFieldAutomatorDateExtract extends AIFieldAutomatorBase {
     }
 
     if ($has_end_date) {
-      $suffix .= " Each object must have \"value\" (start date] and \"value2\" (end date] as {$format_desc} strings.";
+      $suffix .= " Each object must have \"value\" (start date) and \"value2\" (end date) as {$format_desc} strings.";
       $suffix .= " If only one date is found, use it for both value and value2.";
       $suffix .= " Example: [{\"value\":\"{$example_val}\",\"value2\":\"{$example_val}\"}]";
     }
@@ -130,7 +130,7 @@ class AIFieldAutomatorDateExtract extends AIFieldAutomatorBase {
       $suffix .= " Example: [{\"value\":\"{$example_val}\"}]";
     }
 
-    $suffix .= "\nParse any date format (American, European, relative, written-out, etc.] into the format shown.";
+    $suffix .= "\nParse any date format (American, European, relative, written-out, etc.) into the format shown.";
     $suffix .= " If the text contains no recognizable dates, return an empty array [].";
     $suffix .= " Do not include explanations. Return only the JSON array.";
 
@@ -232,8 +232,8 @@ class AIFieldAutomatorDateExtract extends AIFieldAutomatorBase {
     // Fall back to PHP's strtotime for informal/relative dates.
     $timestamp = @strtotime($cleaned);
     if ($timestamp !== FALSE && $timestamp !== -1) {
-      $date = new DateTime('@' . $timestamp);
-      $date->setTimezone(new DateTimeZone(date_default_timezone()));
+      $date = new \DateTime('@' . $timestamp);
+      $date->setTimezone(new \DateTimeZone(date_default_timezone()));
       return $date;
     }
 
