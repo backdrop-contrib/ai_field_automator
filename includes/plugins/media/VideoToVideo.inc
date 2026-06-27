@@ -264,7 +264,7 @@ class AIFieldAutomatorVideoToVideo extends AIFieldAutomatorBase {
    */
   protected function normalizeTimestamp($value) {
     $value = trim((string) $value);
-    if (preg_match('/^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$/', $value)) {
+    if (preg_match('/^\d{1,2}:[0-5]\d:[0-5]\d(?:\.\d+)?$/', $value)) {
       return $value;
     }
     if (preg_match('/^\d+$/', $value)) {
