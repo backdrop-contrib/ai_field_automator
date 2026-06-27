@@ -61,12 +61,12 @@ class AIFieldAutomatorOfficeHours extends AIFieldAutomatorBase {
         ) {
           continue;
         }
+        $day = (int) preg_replace('/[^0-9]/', '', (string) $candidate['day']);
+        if ($day < 1 || $day > 7) {
+          continue;
+        }
         $values[] = [
-          'day' => preg_replace(
-            '/[^0-9]/',
-            '',
-            (string) $candidate['day']
-          ),
+          'day' => (string) $day,
           'starthours' => preg_replace(
             '/[^0-9]/',
             '',
