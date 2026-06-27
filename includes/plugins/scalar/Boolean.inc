@@ -51,10 +51,11 @@ class AIFieldAutomatorBoolean extends AIFieldAutomatorBase {
 
       foreach ($rows as $row) {
         $raw = strtolower((string) ($row['value'] ?? ''));
-        if (preg_match('/\b(true|yes|y|1|enabled|on)\b/', $raw)) {
+        $normalized = trim($raw, " \t\n\r\0\x0B.,!?:;\"'()[]{}");
+        if (preg_match('/^(true|yes|y|1|enabled|on)$/', $normalized)) {
           $values[] = 1;
         }
-        elseif (preg_match('/\b(false|no|n|0|disabled|off)\b/', $raw)) {
+        elseif (preg_match('/^(false|no|n|0|disabled|off)$/', $normalized)) {
           $values[] = 0;
         }
       }
