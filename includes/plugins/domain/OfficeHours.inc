@@ -35,7 +35,7 @@ class AIFieldAutomatorOfficeHours extends AIFieldAutomatorBase {
 
     $values = [];
     foreach ($prompts as $prompt) {
-      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"day\":\"1-7 (1=Monday]\",\"starthours\":\"HHMM\",\"endhours\":\"HHMM\"}}]";
+      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"day\":\"1-7 (1=Monday)\",\"starthours\":\"HHMM\",\"endhours\":\"HHMM\"}}]";
       $prompt .= "\nOnly include days that are open.";
       $text = $this->callAI($prompt, $config);
       if ($text === '') {

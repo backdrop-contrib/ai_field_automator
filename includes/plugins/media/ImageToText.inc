@@ -16,7 +16,7 @@ class AIFieldAutomatorImageToText extends AIFieldAutomatorBase {
    */
   public function helpText() {
     return t(
-      'Extracts text from images (OCR] and stores it in a text or HTML field. Requires a vision-capable model.'
+      'Extracts text from images (OCR) and stores it in a text or HTML field. Requires a vision-capable model.'
     );
   }
 
@@ -50,7 +50,7 @@ class AIFieldAutomatorImageToText extends AIFieldAutomatorBase {
     $prompts = $this->buildPrompts($entity, $config);
     if (empty($prompts)) {
       // If no prompt template, use a default OCR prompt.
-      $prompts = [t('Extract all text from the attached image(s]. Format as clean text or HTML if requested.')];
+      $prompts = [t('Extract all text from the attached image(s). Format as clean text or HTML if requested.')];
     }
 
     $values = [];

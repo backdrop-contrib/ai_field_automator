@@ -62,7 +62,7 @@ function _ai_field_automator_field_widget_form_alter(&$element, &$form_state, $c
   }
 
   $wrapper_id = 'ai-field-automator-widget-' . $entity_type . '-' . $bundle . '-' . $field_name . '-' . $delta;
-  $wrapper_id = drupal_html_id($wrapper_id);
+  $wrapper_id = backdrop_html_id($wrapper_id);
 
   $existing_prefix = isset($element['#prefix']) ? $element['#prefix'] : '';
   $existing_suffix = isset($element['#suffix']) ? $element['#suffix'] : '';
@@ -229,7 +229,7 @@ function _ai_field_automator_widget_action_submit($form, &$form_state) {
     return;
   }
 
-  $entity = _ai_field_automator_widget_action_build_entity($form, $form_state, $entity_type, $bundle);
+  $entity = _ai_field_automator_widget_action_build_entity($form, $form_state, $entity_type, $bundle, $field_name);
   if (!$entity) {
     backdrop_set_message(t('Could not build entity context for field generation.'), 'error');
     $form_state['rebuild'] = TRUE;
@@ -241,7 +241,7 @@ function _ai_field_automator_widget_action_submit($form, &$form_state) {
   $entity_id = function_exists('entity_id') ? entity_id($entity_type, $entity) : NULL;
   if ($entity_id && module_exists('ai_async')) {
   $wrapper_id = 'ai-field-automator-widget-' . $entity_type . '-' . $bundle . '-' . $field_name . '-' . $delta;
-    $wrapper_id = drupal_html_id($wrapper_id);
+    $wrapper_id = backdrop_html_id($wrapper_id);
 
     $job_id = ai_async_submit('ai_field_automator_async_generate', [
       'entity_type' => $entity_type,
@@ -373,7 +373,7 @@ function _ai_field_automator_widget_action_ajax($form, &$form_state) {
 /**
  * Builds a best-effort entity object from current form state values.
  */
-function _ai_field_automator_widget_action_build_entity($form, &$form_state, $entity_type, $bundle) {
+function _ai_field_automator_widget_action_build_entity($form, &$form_state, $entity_type, $bundle, $field_name = '') {
   $entity = NULL;
   if ($entity_type === 'node') {
     if (!empty($form_state['node']) && is_object($form_state['node'])) {
@@ -422,7 +422,7 @@ function _ai_field_automator_widget_action_build_entity($form, &$form_state, $en
     $preview = ai_field_automator_extract_node_preview_text_from_form_state(
       $values,
       $bundle,
-      ['exclude_fields' => [$field_name]]
+      $field_name !== '' ? ['exclude_fields' => [$field_name]] : []
     );
     if ($preview !== '') {
       $entity->ai_field_automator_preview_text = $preview;
@@ -562,7 +562,7 @@ function _ai_field_automator_node_form_add_taxonomy_widget_action_buttons(&$form
       continue;
     }
 
-    $wrapper_id = drupal_html_id('ai-field-automator-node-taxonomy-' . $bundle . '-' . $field_name);
+    $wrapper_id = backdrop_html_id('ai-field-automator-node-taxonomy-' . $bundle . '-' . $field_name);
     $existing_prefix = $form[$field_name]['#prefix'] ?? '';
     $existing_suffix = $form[$field_name]['#suffix'] ?? '';
     $form[$field_name]['#prefix'] = '<div id="' . check_plain($wrapper_id) . '">' . $existing_prefix;

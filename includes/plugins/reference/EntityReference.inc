@@ -4,6 +4,7 @@
 namespace ai_field_automator\includes\plugins\reference;
 
 use ai_field_automator\includes\AIFieldAutomatorBase;
+use stdClass;
 
 /**
  * @file

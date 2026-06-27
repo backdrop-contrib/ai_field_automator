@@ -525,14 +525,24 @@ function ai_field_automator_taxonomy_term_presave($term) {
  * Implements hook_node_insert().
  */
 function ai_field_automator_node_insert($node) {
+  if (!ai_field_automator_entity_can_save_toggle() || ai_field_automator_is_queue_processing()) {
+    return;
+  }
   $runner = new AIFieldAutomatorRunner();
   $runner->enqueueEntity('node', $node);
 }
 
 /**
  * Implements hook_node_update().
+ *
+ * Skipped during internal saves (queue worker, batch) — otherwise the queue
+ * worker's node_save() would re-enqueue the same node and every cron run
+ * would re-process it forever.
  */
 function ai_field_automator_node_update($node) {
+  if (!ai_field_automator_entity_can_save_toggle() || ai_field_automator_is_queue_processing()) {
+    return;
+  }
   $runner = new AIFieldAutomatorRunner();
   $runner->enqueueEntity('node', $node);
 }
@@ -614,14 +624,22 @@ function ai_field_automator_node_form_submit($form, &$form_state) {
  * Implements hook_taxonomy_term_insert().
  */
 function ai_field_automator_taxonomy_term_insert($term) {
+  if (!ai_field_automator_entity_can_save_toggle() || ai_field_automator_is_queue_processing()) {
+    return;
+  }
   $runner = new AIFieldAutomatorRunner();
   $runner->enqueueEntity('taxonomy_term', $term);
 }
 
 /**
  * Implements hook_taxonomy_term_update().
+ *
+ * Same internal-save guard as ai_field_automator_node_update().
  */
 function ai_field_automator_taxonomy_term_update($term) {
+  if (!ai_field_automator_entity_can_save_toggle() || ai_field_automator_is_queue_processing()) {
+    return;
+  }
   $runner = new AIFieldAutomatorRunner();
   $runner->enqueueEntity('taxonomy_term', $term);
 }
@@ -870,7 +888,7 @@ function ai_field_automator_ai_field_automator_type_info() {
     ],
     'date_extract' => [
       'label' => t('Date Extract'),
-      'description' => t('Extract dates from text (any format] into date/datetime/datestamp fields. Handles inconsistent formats, relative dates, and optional end dates.'),
+      'description' => t('Extract dates from text (any format) into date/datetime/datestamp fields. Handles inconsistent formats, relative dates, and optional end dates.'),
       'field_types' => ['date', 'datetime', 'datestamp'],
       'class' => 'ai_field_automator\includes\plugins\scalar\AIFieldAutomatorDateExtract',
       'file' => $base . '/includes/plugins/scalar/DateExtract.inc',
@@ -932,7 +950,7 @@ function ai_field_automator_ai_field_automator_type_info() {
       'file' => $base . '/includes/plugins/media/ImageAltText.inc',
     ],
     'image_to_text' => [
-      'label' => t('Image to Text (OCR]'),
+      'label' => t('Image to Text (OCR)'),
       'description' => t('Extract text from source images into text fields.'),
       'field_types' => ['text', 'text_long', 'text_with_summary', 'string', 'string_long'],
       'class' => 'ai_field_automator\includes\plugins\media\AIFieldAutomatorImageToText',
@@ -1095,7 +1113,7 @@ function ai_field_automator_ai_field_automator_type_info() {
     ],
     'agent_field' => [
       'label'       => t('Agent'),
-      'description' => t('Delegate field generation to a configured AI agent (ReAct loop with tools].'),
+      'description' => t('Delegate field generation to a configured AI agent (ReAct loop with tools).'),
       'field_types' => ['text', 'text_long', 'text_with_summary', 'string', 'string_long', 'taxonomy_term_reference', 'entityreference', 'field_collection'],
       'class'       => 'ai_field_automator\includes\plugins\agent\AIFieldAutomatorAgentField',
       'file'        => $base . '/includes/plugins/agent/AgentField.inc',
@@ -1257,7 +1275,8 @@ function ai_field_automator_ai_tools() {
       'execute'     => 'ai_field_automator_tool_regenerate_field',
       'operation'   => 'write',
       'destructive' => FALSE,
-      'permission'  => 'edit any content',
+      // No flat permission key: editing is per-node, enforced via
+      // node_access('update') inside the executor.
     ],
   ];
 }
@@ -1276,6 +1295,9 @@ function ai_field_automator_tool_regenerate_field(array $args) {
   $node = node_load($nid);
   if (!$node) {
     return json_encode(['error' => "Node $nid not found."]);
+  }
+  if (!node_access('update', $node)) {
+    return json_encode(['error' => 'You do not have permission to edit this node.']);
   }
 
   $runner = new ai_field_automator\includes\AIFieldAutomatorRunner();

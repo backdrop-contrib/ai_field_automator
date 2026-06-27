@@ -104,7 +104,7 @@ class AIFieldAutomatorVideoToVideo extends AIFieldAutomatorBase {
       }
 
       $prompt = $instruction . "\n\nVideo transcript:\n" . trim($transcript);
-      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"start_time\":\"HH:MM:SS(.ms]\",\"end_time\":\"HH:MM:SS(.ms]\"}}]";
+      $prompt .= "\n\nReturn RFC8259 JSON only in this format: [{\"value\":{\"start_time\":\"HH:MM:SS(.ms)\",\"end_time\":\"HH:MM:SS(.ms)\"}}]";
       $text = $this->callAI($prompt, $config);
       if ($text === '') {
         continue;
@@ -263,7 +263,7 @@ class AIFieldAutomatorVideoToVideo extends AIFieldAutomatorBase {
    */
   protected function normalizeTimestamp($value) {
     $value = trim((string) $value);
-    if (preg_match('/^\d{1,2}:\d{2}:\d{2}(?:\.\d+]?$/', $value)) {
+    if (preg_match('/^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$/', $value)) {
       return $value;
     }
     if (preg_match('/^\d+$/', $value)) {

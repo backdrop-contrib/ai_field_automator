@@ -16,7 +16,7 @@ class AIFieldAutomatorAgentField extends AIFieldAutomatorBase {
    */
   public function helpText() {
     return t(
-      'Delegates field generation to a configured AI agent (ReAct loop with tools]. '
+      'Delegates field generation to a configured AI agent (ReAct loop with tools). '
       . 'Select an agent and provide an optional task instruction.'
     );
   }
@@ -42,7 +42,7 @@ class AIFieldAutomatorAgentField extends AIFieldAutomatorBase {
    */
   public function generate($entity, $field_name, array $config) {
     $agent_id = $config['agent_id'] ?? '';
-    if (!$agent_id || !module_exists('ai_agent') || !function_exists('ai_agent_run')) {
+    if (!$agent_id || !module_exists('ai_agents') || !function_exists('ai_agents_run')) {
       return [];
     }
 
@@ -50,7 +50,7 @@ class AIFieldAutomatorAgentField extends AIFieldAutomatorBase {
     $task    = $config['agent_task'] ?? "Generate a value for the field '{$field_name}'. Return text only.";
     $message = ($context !== '' ? $context . "\n\nTask: " : 'Task: ') . $task;
 
-    $result = ai_agent_run($agent_id, $message);
+    $result = ai_agents_run($agent_id, $message);
 
     if (!empty($result['error']) || empty($result['answer'])) {
       watchdog('ai_field_automator', 'Agent run failed for field %field: %err', [

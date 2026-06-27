@@ -725,6 +725,13 @@ abstract class AIFieldAutomatorBase implements
       return NULL;
     }
 
+    // Filename patterns are bare filenames; strip any path segments so a
+    // crafted value can't write outside the files directory.
+    $filename = basename(str_replace('\\', '/', (string) $filename));
+    if ($filename === '' || $filename === '.' || $filename === '..') {
+      $filename = 'ai-file-' . REQUEST_TIME;
+    }
+
     $uri = file_unmanaged_save_data(
       $binary,
       file_default_scheme() . '://' . $filename,

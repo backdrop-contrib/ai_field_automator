@@ -16,7 +16,7 @@ class AIFieldAutomatorBoolean extends AIFieldAutomatorBase {
    */
   public function helpText() {
     return t(
-      'Generates a boolean yes/no value and stores 1 (true] or 0 (false].'
+      'Generates a boolean yes/no value and stores 1 (true) or 0 (false).'
     );
   }
 
@@ -51,10 +51,10 @@ class AIFieldAutomatorBoolean extends AIFieldAutomatorBase {
 
       foreach ($rows as $row) {
         $raw = strtolower((string) ($row['value'] ?? ''));
-        if (preg_match('/\b(true|yes|y|1|enabled|on]\b/', $raw)) {
+        if (preg_match('/\b(true|yes|y|1|enabled|on)\b/', $raw)) {
           $values[] = 1;
         }
-        elseif (preg_match('/\b(false|no|n|0|disabled|off]\b/', $raw)) {
+        elseif (preg_match('/\b(false|no|n|0|disabled|off)\b/', $raw)) {
           $values[] = 0;
         }
       }
