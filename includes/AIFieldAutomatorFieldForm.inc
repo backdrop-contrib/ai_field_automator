@@ -47,7 +47,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
   }
 
   // Load existing config for this field (if any).
-  $config = ai_field_automator_load_field_config($entity_type, $bundle, $field_name);
+  $config = ai_field_automator_load_field_config($entity_type, $bundle, $field_name, FALSE);
   $config = is_array($config) ? $config : [];
   $enabled = !empty($config['enabled']);
   $current_enabled = isset($form_state['values']['automator_enabled'])
@@ -728,8 +728,7 @@ function _ai_field_automator_field_edit_form_alter(&$form, &$form_state) {
       $form['ai_automator']['settings_wrapper']['provider_config']['automator_model'] = [
         '#type'          => 'select',
         '#title'         => t('Model'),
-        '#options'       => $model_options,
-        '#empty_option'  => t('-- Select a model --'),
+        '#options'       => ai_model_options_with_default($model_options, ai_field_automator_model_type($chosen_type)),
         '#default_value' => $chosen_model,
         '#description'   => t('Models are grouped by provider.'),
         '#ajax'          => [
@@ -949,10 +948,6 @@ function _ai_field_automator_field_edit_form_validate($form, &$form_state) {
   $requires_model = !array_key_exists('requires_model', $type_definition) || !empty($type_definition['requires_model']);
   $requires_prompt = !array_key_exists('requires_prompt', $type_definition) || !empty($type_definition['requires_prompt']);
   $requires_base_field = !array_key_exists('requires_base_field', $type_definition) || !empty($type_definition['requires_base_field']);
-
-  if ($requires_model && empty($values['automator_model'])) {
-    form_set_error('automator_model', t('Choose a model.'));
-  }
 
   $mode = $values['automator_mode'] ?? 'base';
   if ($mode === 'base') {

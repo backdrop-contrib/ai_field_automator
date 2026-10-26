@@ -365,7 +365,7 @@ function ai_field_automator_overview_page() {
       check_plain($c['automator_type']),
       check_plain($c['worker_type'] ?? 'direct'),
       check_plain($c['weight'] ?? 0),
-      check_plain($c['model'] ?? ''),
+      check_plain(!empty($c['model']) ? $c['model'] : t('Site default')),
       $chain_link,
     ];
   }
@@ -1144,13 +1144,43 @@ function ai_field_automator_ai_field_automator_type_info() {
  *
  * @return array|null  Config data array, or NULL if not configured.
  */
-function ai_field_automator_load_field_config($entity_type, $bundle, $field_name) {
+function ai_field_automator_load_field_config($entity_type, $bundle, $field_name, $resolve_model = TRUE) {
   $cache = &backdrop_static(__FUNCTION__, []);
   $key   = $entity_type . '.' . $bundle . '.' . $field_name;
   if (!array_key_exists($key, $cache)) {
     $cache[$key] = config_get('ai_field_automator.' . $key) ?: NULL;
   }
-  return $cache[$key];
+  $config = $cache[$key];
+  // An empty model means "use the site default" for the automator type.
+  if ($resolve_model && is_array($config) && empty($config['model'])) {
+    $config['model'] = ai_resolve_model('', ai_field_automator_model_type($config['automator_type'] ?? ''));
+  }
+  return $config;
+}
+
+/**
+ * Maps an automator type to the model type used for site defaults.
+ */
+function ai_field_automator_model_type($automator_type) {
+  if (in_array($automator_type, ['text_to_image', 'media_image_generation', 'video_to_image'], TRUE)) {
+    return 'image';
+  }
+  if (in_array($automator_type, ['text_to_speech', 'media_audio_generation'], TRUE)) {
+    return 'tts';
+  }
+  if ($automator_type === 'image_to_text') {
+    return 'vision';
+  }
+  if (in_array($automator_type, ['audio_to_text', 'video_to_text'], TRUE)) {
+    return 'stt';
+  }
+  if ($automator_type === 'agent_field') {
+    return 'tool_calling';
+  }
+  if (strpos($automator_type, 'vector_search') !== FALSE) {
+    return 'embedding';
+  }
+  return 'chat';
 }
 
 /**
