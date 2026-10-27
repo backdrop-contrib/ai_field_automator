@@ -21,6 +21,7 @@ this codebase.
 ## Requirements
 
 - Backdrop CMS 1.x
+- PHP 8.2 or later
 - The `ai` module
 
 Some automator types require additional modules or field types, for example:
@@ -49,7 +50,7 @@ Some automator types require additional modules or field types, for example:
 
 The module also provides an overview page at:
 
-- `/admin/config/ai/field-automator`
+- `/admin/config/ai/ai-field-automator`
 
 ## Worker Modes
 
@@ -90,10 +91,19 @@ Focused Xdebug notes for the `post.field_summary` widget-action automator are in
   automators
 - For queue/cron workers, choose an explicit text format when needed because
   cron may run as anonymous
+
+## Issues
+
+Bugs and feature requests should be reported in the [Issue Queue](https://github.com/backdrop-contrib/ai_field_automator/issues).
+
+## Current Maintainer
+
+[Justin Keiser](https://github.com/keiserjb)
+
 ## Credits
 
 - Created for Backdrop CMS by [Justin Keiser](https://github.com/keiserjb).
-- Inspired by the Drupal AI Automators module.
+- Inspired by the Drupal [AI Automators](https://www.drupal.org/project/ai_automators) module.
 - Developed with AI assistance.
 
 ## License
