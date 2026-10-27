@@ -20,7 +20,7 @@ The module adds an **AI Automator** fieldset to the field settings form.
 
 Main file:
 
-- [includes/AIFieldAutomatorFieldForm.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorFieldForm.inc)
+- [includes/AIFieldAutomatorFieldForm.inc](../includes/AIFieldAutomatorFieldForm.inc)
 
 That form stores:
 
@@ -37,7 +37,7 @@ That form stores:
 
 Automator types are declared in:
 
-- [ai_field_automator.module](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/ai_field_automator.module)
+- [ai_field_automator.module](../ai_field_automator.module)
 
 `ai_field_automator_get_types()` collects definitions via
 `hook_ai_field_automator_type_info()` and `hook_ai_field_automator_type_info_alter()`.
@@ -55,11 +55,11 @@ Each type definition provides:
 
 All plugins implement:
 
-- [includes/AIFieldAutomatorInterface.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorInterface.inc)
+- [includes/AIFieldAutomatorInterface.inc](../includes/AIFieldAutomatorInterface.inc)
 
 The base helper class is:
 
-- [includes/AIFieldAutomatorBase.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorBase.inc)
+- [includes/AIFieldAutomatorBase.inc](../includes/AIFieldAutomatorBase.inc)
 
 Important methods:
 
@@ -83,7 +83,7 @@ for example:
 
 The main runtime is:
 
-- [includes/AIFieldAutomatorRunner.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorRunner.inc)
+- [includes/AIFieldAutomatorRunner.inc](../includes/AIFieldAutomatorRunner.inc)
 
 On save, the runner:
 
@@ -97,7 +97,7 @@ On save, the runner:
 
 The runner also updates the synthetic status field through:
 
-- [includes/AIFieldAutomatorStatusField.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorStatusField.inc)
+- [includes/AIFieldAutomatorStatusField.inc](../includes/AIFieldAutomatorStatusField.inc)
 
 Status values:
 
@@ -117,8 +117,8 @@ The module supports four worker modes:
 
 Relevant files:
 
-- [ai_field_automator.module](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/ai_field_automator.module)
-- [includes/AIFieldAutomatorWidgetActions.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorWidgetActions.inc)
+- [ai_field_automator.module](../ai_field_automator.module)
+- [includes/AIFieldAutomatorWidgetActions.inc](../includes/AIFieldAutomatorWidgetActions.inc)
 
 If `ai_async` is available, widget actions for saved entities can dispatch
 generation to a background async callback.
@@ -178,4 +178,4 @@ To add a new automator type:
 3. Register the type in `hook_ai_field_automator_type_info()`
 4. Implement generation, validation, and storage logic
 5. Add any type-specific form controls in
-   [includes/AIFieldAutomatorFieldForm.inc](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/includes/AIFieldAutomatorFieldForm.inc)
+   [includes/AIFieldAutomatorFieldForm.inc](../includes/AIFieldAutomatorFieldForm.inc)

@@ -71,17 +71,17 @@ The module includes a broad set of automator types for:
 
 The full type reference is documented in:
 
-- [AUTOMATOR_TYPES.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/AUTOMATOR_TYPES.md)
+- [AUTOMATOR_TYPES.md](docs/AUTOMATOR_TYPES.md)
 
 ## More Documentation
 
 Implementation details and module architecture are documented separately in:
 
-- [HOW_IT_WORKS.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/HOW_IT_WORKS.md)
+- [HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)
 
 Focused Xdebug notes for the `post.field_summary` widget-action automator are in:
 
-- [DEBUGGING_FIELD_SUMMARY.md](/home/justink/Documents/GitHub/amafoundation-backdrop/modules/contrib/ai_field_automator/DEBUGGING_FIELD_SUMMARY.md)
+- [DEBUGGING_FIELD_SUMMARY.md](docs/DEBUGGING_FIELD_SUMMARY.md)
 
 ## Notes
 
