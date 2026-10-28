@@ -106,7 +106,7 @@ class AIFieldAutomatorFaqField extends AIFieldAutomatorBase {
       else {
         $item[$primary] = "Q: " . $question . "\nA: " . $answer;
         if (!empty($field_info['settings']['allowed_formats'])) {
-          $item['format'] = $config['text_format'] ?? 'plain_text';
+          $item['format'] = $this->resolveTextFormat($config, 'plain_text');
         }
       }
       $items[] = $item;

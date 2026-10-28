@@ -97,7 +97,7 @@ class AIFieldAutomatorTextCreateSummary extends AIFieldAutomatorBase {
         $existing[$delta] = [
           'value' => '',
           'summary' => $summary_text,
-          'format' => $config['text_format'] ?? 'plain_text',
+          'format' => $this->resolveTextFormat($config, 'plain_text'),
         ];
       }
     }

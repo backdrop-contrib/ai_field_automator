@@ -191,7 +191,7 @@ class AIFieldAutomatorModerationState extends AIFieldAutomatorBase {
       TRUE
     )
     ) {
-      $item['format'] = $config['text_format'] ?? 'plain_text';
+      $item['format'] = $this->resolveTextFormat($config, 'plain_text');
     }
     $entity->{$field_name}[LANGUAGE_NONE][0] = $item;
   }

@@ -75,9 +75,7 @@ abstract class AIFieldAutomatorBase implements
         $items[$delta][$primary_column] = $value;
         // Carry over existing format for filtered text fields.
         if (!empty($field_info['settings']['allowed_formats'])) {
-          $format = !empty($config['text_format']) ? $config['text_format']
-            : filter_default_format();
-          $items[$delta]['format'] = $format;
+          $items[$delta]['format'] = $this->resolveTextFormat($config);
         }
       }
     }
@@ -405,6 +403,37 @@ abstract class AIFieldAutomatorBase implements
    */
   protected function collectNestedText($value, array &$chunks) {
     AIContentExtractor::collectTextRecursive($value, $chunks);
+  }
+
+  /**
+   * Returns the text format to store generated output in.
+   *
+   * The output derives from content the acting user controls, so it must not
+   * land in a format that user may not use. The acting user is the one who
+   * queued the job (_account_uid) or else the current user.
+   *
+   * @param array $config
+   *   Automator config.
+   * @param string|null $default
+   *   Format to use when none is configured. NULL means the acting user's
+   *   default format.
+   *
+   * @return string
+   *   Format machine name.
+   */
+  protected function resolveTextFormat(array $config, $default = NULL) {
+    $account = !empty($config['_account_uid']) ? user_load($config['_account_uid']) : NULL;
+    if (!$account) {
+      $account = $GLOBALS['user'];
+    }
+    $format_id = !empty($config['text_format']) ? $config['text_format'] : $default;
+    if ($format_id !== NULL) {
+      $format = filter_format_load($format_id);
+      if ($format && filter_access($format, $account)) {
+        return $format_id;
+      }
+    }
+    return filter_default_format($account);
   }
 
   /**
