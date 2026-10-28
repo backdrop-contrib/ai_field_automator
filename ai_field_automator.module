@@ -150,6 +150,9 @@ function ai_field_automator_async_generate(array $data) {
     $values = [implode($joiner, $values)];
   }
 
+  // Queued jobs run as whoever runs the queue; check formats as the user who
+  // queued the job.
+  $config['_account_uid'] = $account_uid;
   $plugin->storeValues($entity, $values, $field_name, $config);
   $items = isset($entity->{$field_name}[LANGUAGE_NONE]) ? $entity->{$field_name}[LANGUAGE_NONE] : [];
 

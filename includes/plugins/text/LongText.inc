@@ -67,9 +67,7 @@ class AIFieldAutomatorLongText extends AIFieldAutomatorBase {
     $items = [];
     foreach ($values as $delta => $value) {
       $items[$delta]['value'] = $value;
-      $format = !empty($config['text_format']) ? $config['text_format']
-        : filter_default_format();
-      $items[$delta]['format'] = $format;
+      $items[$delta]['format'] = $this->resolveTextFormat($config);
       if ($is_summary_field) {
         // Auto-generate summary: first 500 characters stripped of tags.
         $items[$delta]['summary'] = truncate_utf8(

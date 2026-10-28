@@ -253,7 +253,7 @@ class AIFieldAutomatorEntityReference extends AIFieldAutomatorBase {
           TRUE
         )
         ) {
-          $item['format'] = $config['text_format'] ?? 'plain_text';
+          $item['format'] = $this->resolveTextFormat($config, 'plain_text');
         }
         $node->{$target_field}[LANGUAGE_NONE][0] = $item;
       }
