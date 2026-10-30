@@ -82,12 +82,15 @@ class AIFieldAutomatorTextToImage extends AIFieldAutomatorBase {
     }
 
     if (!empty($item['url'])) {
-      $binary = @file_get_contents($item['url']);
+      // Provider URLs are untrusted: only data URLs or public https hosts.
+      $binary = strpos($item['url'], 'data:image/') === 0
+        ? \AIImageHelper::parseDataUrl($item['url'])
+        : \AIImageHelper::download($item['url']);
       if ($binary) {
         $ext = 'png';
         $mime = '';
         if (class_exists('finfo')) {
-          $finfo = new finfo(FILEINFO_MIME_TYPE);
+          $finfo = new \finfo(FILEINFO_MIME_TYPE);
           $mime = $finfo->buffer($binary);
         }
         if ($mime === 'image/jpeg') {
